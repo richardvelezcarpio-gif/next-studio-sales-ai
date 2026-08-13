@@ -26,3 +26,7 @@ npm run dev
 ## Verification
 
 `npm run build` completes successfully.
+
+## OpenAI (Phase 3)
+
+The browser never receives an API key. For a Vercel deployment, set `OPENAI_API_KEY` in the server environment. The serverless endpoint at `api/ai.ts` uses the Responses API and returns a safe local-fallback status whenever the key is absent, the request times out, or the response is invalid. Copy `.env.example` only for local server configuration; never commit a real `.env` file.
