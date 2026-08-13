@@ -1,0 +1,4 @@
+import type { Language, Lead } from '../../types';
+export type RemoteAIResult<T>={provider:'openai'|'local';fallback?:boolean;result?:T;error?:string};
+export const requestOpenAI=async<T>(operation:string,context:Record<string,unknown>):Promise<RemoteAIResult<T>>=>{try{const response=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation,context}),signal:AbortSignal.timeout(15000)});const data=await response.json();return data}catch{return {provider:'local',fallback:true,error:'AI unavailable'}}};
+export const prospectContext=(lead:Lead,language:Language,notes:string[]=[])=>({firstName:lead.firstName,businessName:lead.business,service:lead.service,stage:lead.stage,preferredLanguage:language,estimatedValue:lead.potentialValue,notes:notes.slice(0,3)});
