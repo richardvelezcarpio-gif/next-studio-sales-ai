@@ -36,7 +36,10 @@ import { AIBadge, Insights, Playbook, intelligence } from "./Phase2";
 import { AIHub } from "./Phase3";
 import { Automations, Communications, Tasks } from "./Phase4";
 import { prospectsRepository } from "./services/db/prospects";
-import { followUpsRepository, type CloudFollowUp } from "./services/db/followUps";
+import {
+  followUpsRepository,
+  type CloudFollowUp,
+} from "./services/db/followUps";
 import { useAuth } from "./auth/AuthProvider";
 const id = () => crypto.randomUUID();
 const today = () => new Date().toISOString().slice(0, 10);
@@ -126,9 +129,7 @@ function App() {
           />
           <Route
             path="/follow-ups"
-            element={
-            <FollowUpsCloud db={db} lang={lang} />
-            }
+            element={<FollowUpsCloud db={db} lang={lang} />}
           />
           <Route
             path="/tasks"
@@ -1110,7 +1111,7 @@ function FollowUps({
       <PageTitle title={t(lang, "followups")} />
       {groups.map(([title, list]) => (
         <Panel title={title} key={title}>
-          <div className="follow-list">
+          <div className="follow-list followups-cloud-list">
             {list.map((f) => {
               const l = db.leads.find((x) => x.id === f.leadId);
               return (
@@ -1173,7 +1174,272 @@ function FollowUps({
   );
 }
 void FollowUps;
-function FollowUpsCloud({db,lang}:{db:ReturnType<typeof storage.get>;lang:Language}){const {user,configured}=useAuth();const [items,setItems]=useState<CloudFollowUp[]>([]);const [error,setError]=useState('');const [form,setForm]=useState<any>();const blank=()=>({prospectId:db.leads[0]?.id||'',dueAt:new Date().toISOString().slice(0,16),type:'call',note:''});useEffect(()=>{if(configured&&user)followUpsRepository.getAll().then(setItems).catch(()=>setError(lang==='es'?'No se pudieron cargar los seguimientos':'Unable to load follow-ups'))},[configured,user,lang]);const save=async(e:React.FormEvent)=>{e.preventDefault();try{const x={prospectId:form.prospectId,dueAt:new Date(form.dueAt).toISOString(),type:form.type,note:form.note,status:'pending' as const};const r=form.id?await followUpsRepository.update(form.id,x):await followUpsRepository.create(x);setItems(a=>form.id?a.map(i=>i.id===r.id?r:i):[r,...a]);setForm(undefined)}catch{setError(lang==='es'?'No se pudo guardar el seguimiento':'Unable to save follow-up')}};const update=async(x:CloudFollowUp,p:Partial<CloudFollowUp>)=>{try{const r=await followUpsRepository.update(x.id,{...x,...p});setItems(a=>a.map(i=>i.id===r.id?r:i))}catch{setError(lang==='es'?'No se pudo actualizar':'Unable to update')}};const remove=async(x:CloudFollowUp)=>{if(!confirm(lang==='es'?'¿Eliminar seguimiento?':'Delete follow-up?'))return;try{await followUpsRepository.remove(x.id);setItems(a=>a.filter(i=>i.id!==x.id))}catch{setError(lang==='es'?'No se pudo eliminar':'Unable to delete')}};const now=new Date(),groups=[[lang==='es'?'Vencidos':'Overdue',items.filter(x=>x.status!=='completed'&&x.dueAt&&new Date(x.dueAt)<now&&x.dueAt.slice(0,10)!==today())],[lang==='es'?'Hoy':'Today',items.filter(x=>x.status!=='completed'&&x.dueAt?.slice(0,10)===today())],[lang==='es'?'Próximos':'Upcoming',items.filter(x=>x.status!=='completed'&&x.dueAt&&x.dueAt.slice(0,10)>today())],[lang==='es'?'Completados':'Completed',items.filter(x=>x.status==='completed')]] as const;return <><PageTitle title={t(lang,'followups')}><button className="primary" onClick={()=>setForm(blank())}><Plus size={16}/>{lang==='es'?'Crear seguimiento':'Create follow-up'}</button></PageTitle>{error&&<p className="ai-note">{error}</p>}{groups.map(([name,list])=><Panel title={name} key={name}><div className="follow-list">{list.map(x=>{const l=db.leads.find(q=>q.id===x.prospectId);return <article key={x.id}><div><b>{l?`${l.firstName} ${l.lastName}`:lang==='es'?'Prospecto eliminado':'Deleted prospect'}</b><span>{x.type} · {x.dueAt&&new Date(x.dueAt).toLocaleString()} · {x.status}</span><small>{x.note}</small></div><button className="primary" onClick={()=>update(x,{status:x.status==='completed'?'pending':'completed',completedAt:x.status==='completed'?undefined:new Date().toISOString()})}>{x.status==='completed'?(lang==='es'?'Reabrir':'Reopen'):(lang==='es'?'Completar':'Complete')}</button><button onClick={()=>{const due=prompt(lang==='es'?'Nueva fecha/hora YYYY-MM-DDTHH:mm':'New date/time YYYY-MM-DDTHH:mm',x.dueAt?.slice(0,16));if(due)update(x,{dueAt:new Date(due).toISOString(),status:'pending'})}}>{lang==='es'?'Reprogramar':'Reschedule'}</button><button onClick={()=>setForm({...x,dueAt:x.dueAt?.slice(0,16)})}>{lang==='es'?'Editar':'Edit'}</button><button onClick={()=>remove(x)}><Trash2 size={15}/></button></article>})}{!list.length&&<Empty lang={lang}/>}</div></Panel>)}{form&&<div className="modal-bg"><form className="modal" onSubmit={save}><h2>{form.id?(lang==='es'?'Editar seguimiento':'Edit follow-up'):(lang==='es'?'Crear seguimiento':'Create follow-up')}</h2><section className="form-grid"><label>{lang==='es'?'Prospecto':'Prospect'}<select required value={form.prospectId} onChange={e=>setForm({...form,prospectId:e.target.value})}>{db.leads.map(l=><option value={l.id}>{l.firstName} {l.lastName}</option>)}</select></label><label>{lang==='es'?'Fecha y hora':'Date and time'}<input required type="datetime-local" value={form.dueAt} onChange={e=>setForm({...form,dueAt:e.target.value})}/></label><label>{lang==='es'?'Tipo':'Type'}<select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>{['call','email','whatsapp','meeting','other'].map(x=><option value={x}>{x}</option>)}</select></label><label className="wide">{lang==='es'?'Nota':'Note'}<textarea value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})}/></label></section><footer><button type="button" onClick={()=>setForm(undefined)}>{lang==='es'?'Cancelar':'Cancel'}</button><button className="primary">{lang==='es'?'Guardar':'Save'}</button></footer></form></div>}</>}
+function FollowUpsCloud({
+  db,
+  lang,
+}: {
+  db: ReturnType<typeof storage.get>;
+  lang: Language;
+}) {
+  const { user, configured } = useAuth();
+  const [items, setItems] = useState<CloudFollowUp[]>([]);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState<any>();
+  const blank = () => ({
+    prospectId: db.leads[0]?.id || "",
+    dueAt: new Date().toISOString().slice(0, 16),
+    type: "call",
+    note: "",
+  });
+  useEffect(() => {
+    if (configured && user)
+      followUpsRepository
+        .getAll()
+        .then(setItems)
+        .catch(() =>
+          setError(
+            lang === "es"
+              ? "No se pudieron cargar los seguimientos"
+              : "Unable to load follow-ups",
+          ),
+        );
+  }, [configured, user, lang]);
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const x = {
+        prospectId: form.prospectId,
+        dueAt: new Date(form.dueAt).toISOString(),
+        type: form.type,
+        note: form.note,
+        status: "pending" as const,
+      };
+      const r = form.id
+        ? await followUpsRepository.update(form.id, x)
+        : await followUpsRepository.create(x);
+      setItems((a) =>
+        form.id ? a.map((i) => (i.id === r.id ? r : i)) : [r, ...a],
+      );
+      setForm(undefined);
+    } catch {
+      setError(
+        lang === "es"
+          ? "No se pudo guardar el seguimiento"
+          : "Unable to save follow-up",
+      );
+    }
+  };
+  const update = async (x: CloudFollowUp, p: Partial<CloudFollowUp>) => {
+    try {
+      const r = await followUpsRepository.update(x.id, { ...x, ...p });
+      setItems((a) => a.map((i) => (i.id === r.id ? r : i)));
+    } catch {
+      setError(lang === "es" ? "No se pudo actualizar" : "Unable to update");
+    }
+  };
+  const remove = async (x: CloudFollowUp) => {
+    if (
+      !confirm(lang === "es" ? "¿Eliminar seguimiento?" : "Delete follow-up?")
+    )
+      return;
+    try {
+      await followUpsRepository.remove(x.id);
+      setItems((a) => a.filter((i) => i.id !== x.id));
+    } catch {
+      setError(lang === "es" ? "No se pudo eliminar" : "Unable to delete");
+    }
+  };
+  const now = new Date(),
+    groups = [
+      [
+        lang === "es" ? "Vencidos" : "Overdue",
+        items.filter(
+          (x) =>
+            x.status !== "completed" &&
+            x.dueAt &&
+            new Date(x.dueAt) < now &&
+            x.dueAt.slice(0, 10) !== today(),
+        ),
+      ],
+      [
+        lang === "es" ? "Hoy" : "Today",
+        items.filter(
+          (x) => x.status !== "completed" && x.dueAt?.slice(0, 10) === today(),
+        ),
+      ],
+      [
+        lang === "es" ? "Próximos" : "Upcoming",
+        items.filter(
+          (x) =>
+            x.status !== "completed" &&
+            x.dueAt &&
+            x.dueAt.slice(0, 10) > today(),
+        ),
+      ],
+      [
+        lang === "es" ? "Completados" : "Completed",
+        items.filter((x) => x.status === "completed"),
+      ],
+    ] as const;
+  return (
+    <>
+      <PageTitle title={t(lang, "followups")}>
+        <button className="primary" onClick={() => setForm(blank())}>
+          <Plus size={16} />
+          {lang === "es" ? "Crear seguimiento" : "Create follow-up"}
+        </button>
+      </PageTitle>
+      {error && <p className="ai-note">{error}</p>}
+      {groups.map(([name, list]) => (
+        <Panel title={name} key={name}>
+          <div className="follow-list">
+            {list.map((x) => {
+              const l = db.leads.find((q) => q.id === x.prospectId);
+              return (
+                <article key={x.id} className="followup-card">
+                  <div className="followup-card__content">
+                    <b>
+                      {l
+                        ? `${l.firstName} ${l.lastName}`
+                        : lang === "es"
+                          ? "Prospecto eliminado"
+                          : "Deleted prospect"}
+                    </b>
+                    <span>
+                      {x.type} · {x.dueAt && new Date(x.dueAt).toLocaleString()}{" "}
+                      · {x.status}
+                    </span>
+                    <small>{x.note}</small>
+                  </div>
+                  <div className="followup-card__actions"><button
+                    className="primary"
+                    onClick={() =>
+                      update(x, {
+                        status:
+                          x.status === "completed" ? "pending" : "completed",
+                        completedAt:
+                          x.status === "completed"
+                            ? undefined
+                            : new Date().toISOString(),
+                      })
+                    }
+                  >
+                    {x.status === "completed"
+                      ? lang === "es"
+                        ? "Reabrir"
+                        : "Reopen"
+                      : lang === "es"
+                        ? "Completar"
+                        : "Complete"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const due = prompt(
+                        lang === "es"
+                          ? "Nueva fecha/hora YYYY-MM-DDTHH:mm"
+                          : "New date/time YYYY-MM-DDTHH:mm",
+                        x.dueAt?.slice(0, 16),
+                      );
+                      if (due)
+                        update(x, {
+                          dueAt: new Date(due).toISOString(),
+                          status: "pending",
+                        });
+                    }}
+                  >
+                    {lang === "es" ? "Reprogramar" : "Reschedule"}
+                  </button>
+                  <button
+                    onClick={() =>
+                      setForm({ ...x, dueAt: x.dueAt?.slice(0, 16) })
+                    }
+                  >
+                    {lang === "es" ? "Editar" : "Edit"}
+                  </button>
+                  <button onClick={() => remove(x)}>
+                    <Trash2 size={15} />
+                  </button>
+                  </div>
+                </article>
+              );
+            })}
+            {!list.length && <Empty lang={lang} />}
+          </div>
+        </Panel>
+      ))}
+      {form && (
+        <div className="modal-bg">
+          <form className="modal" onSubmit={save}>
+            <h2>
+              {form.id
+                ? lang === "es"
+                  ? "Editar seguimiento"
+                  : "Edit follow-up"
+                : lang === "es"
+                  ? "Crear seguimiento"
+                  : "Create follow-up"}
+            </h2>
+            <section className="form-grid">
+              <label>
+                {lang === "es" ? "Prospecto" : "Prospect"}
+                <select
+                  required
+                  value={form.prospectId}
+                  onChange={(e) =>
+                    setForm({ ...form, prospectId: e.target.value })
+                  }
+                >
+                  {db.leads.map((l) => (
+                    <option value={l.id}>
+                      {l.firstName} {l.lastName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {lang === "es" ? "Fecha y hora" : "Date and time"}
+                <input
+                  required
+                  type="datetime-local"
+                  value={form.dueAt}
+                  onChange={(e) => setForm({ ...form, dueAt: e.target.value })}
+                />
+              </label>
+              <label>
+                {lang === "es" ? "Tipo" : "Type"}
+                <select
+                  value={form.type}
+                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+                >
+                  {["call", "email", "whatsapp", "meeting", "other"].map(
+                    (x) => (
+                      <option value={x}>{x}</option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label className="wide">
+                {lang === "es" ? "Nota" : "Note"}
+                <textarea
+                  value={form.note || ""}
+                  onChange={(e) => setForm({ ...form, note: e.target.value })}
+                />
+              </label>
+            </section>
+            <footer>
+              <button type="button" onClick={() => setForm(undefined)}>
+                {lang === "es" ? "Cancelar" : "Cancel"}
+              </button>
+              <button className="primary">
+                {lang === "es" ? "Guardar" : "Save"}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
+    </>
+  );
+}
 function Messages({
   db,
   save,

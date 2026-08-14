@@ -503,7 +503,21 @@ export function Automations({
     setOps(x);
     put(x);
   };
-  useEffect(() => { if (configured && user) automationsRepository.getAll().then(setRules).catch(() => notify(tx(lang, "Unable to load automation rules", "No se pudieron cargar las reglas"))); }, [configured, user, lang]);
+  useEffect(() => {
+    if (configured && user)
+      automationsRepository
+        .getAll()
+        .then(setRules)
+        .catch(() =>
+          notify(
+            tx(
+              lang,
+              "Unable to load automation rules",
+              "No se pudieron cargar las reglas",
+            ),
+          ),
+        );
+  }, [configured, user, lang]);
   const add = async () => {
     const r: AutomationRule = {
       id: uid(),
@@ -518,7 +532,27 @@ export function Automations({
       active: true,
       timesTriggered: 0,
     };
-    if (configured && user) { try { const saved = await automationsRepository.create({ name: r.name, active: true, triggerType: r.trigger, condition: { description: r.condition }, actionType: r.action }); setRules((x) => [saved, ...x]); } catch { notify(tx(lang, "Unable to save automation rule", "No se pudo guardar la regla")); return; } } else save({ ...ops, rules: [r, ...ops.rules] });
+    if (configured && user) {
+      try {
+        const saved = await automationsRepository.create({
+          name: r.name,
+          active: true,
+          triggerType: r.trigger,
+          condition: { description: r.condition },
+          actionType: r.action,
+        });
+        setRules((x) => [saved, ...x]);
+      } catch {
+        notify(
+          tx(
+            lang,
+            "Unable to save automation rule",
+            "No se pudo guardar la regla",
+          ),
+        );
+        return;
+      }
+    } else save({ ...ops, rules: [r, ...ops.rules] });
     notify(
       tx(lang, "Automation rule created", "Regla de automatización creada"),
     );
@@ -544,10 +578,20 @@ export function Automations({
             "Las reglas solo crean tareas, alertas, recomendaciones o borradores. Nunca envían mensajes automáticamente.",
           )}
         </p>
-        <div className="ops-list">
-          {(configured && user ? rules.map((r:any) => ({...r, trigger:r.trigger_type, condition:r.condition?.description||'', action:r.action_type, timesTriggered:r.times_triggered||0, lastRun:r.last_run_at})) : ops.rules).map((r:any) => (
-            <article key={r.id}>
-              <div>
+        <div className="ops-list automation-list">
+          {(configured && user
+            ? rules.map((r: any) => ({
+                ...r,
+                trigger: r.trigger_type,
+                condition: r.condition?.description || "",
+                action: r.action_type,
+                timesTriggered: r.times_triggered || 0,
+                lastRun: r.last_run_at,
+              }))
+            : ops.rules
+          ).map((r: any) => (
+            <article key={r.id} className="automation-card">
+              <div className="automation-card__content">
                 <b>{r.name}</b>
                 <span>
                   {r.trigger} · {r.condition} → {r.action}
@@ -555,10 +599,11 @@ export function Automations({
                 <small>
                   {tx(lang, "Times triggered: ", "Veces activada: ")}
                   {r.timesTriggered}
-                  {r.lastRun && ` · ${tx(lang, "Last run: ", "Última ejecución: ")}${new Date(r.lastRun).toLocaleString()}`}
+                  {r.lastRun &&
+                    ` · ${tx(lang, "Last run: ", "Última ejecución: ")}${new Date(r.lastRun).toLocaleString()}`}
                 </small>
               </div>
-              <label className="toggle">
+              <div className="automation-card__controls"><label className="toggle">
                 <span>
                   {r.active
                     ? tx(lang, "Active", "Activa")
@@ -568,16 +613,94 @@ export function Automations({
                   type="checkbox"
                   checked={r.active}
                   onChange={(e) =>
-                    configured && user ? automationsRepository.update(r.id, { active: e.target.checked }).then((saved) => setRules((all) => all.map((x) => x.id === r.id ? saved : x))).catch(() => notify(tx(lang, "Unable to update automation rule", "No se pudo actualizar la regla"))) : save({
-                      ...ops,
-                      rules: ops.rules.map((x) =>
-                        x.id === r.id ? { ...x, active: e.target.checked } : x,
-                      ),
-                    })
+                    configured && user
+                      ? automationsRepository
+                          .update(r.id, { active: e.target.checked })
+                          .then((saved) =>
+                            setRules((all) =>
+                              all.map((x) => (x.id === r.id ? saved : x)),
+                            ),
+                          )
+                          .catch(() =>
+                            notify(
+                              tx(
+                                lang,
+                                "Unable to update automation rule",
+                                "No se pudo actualizar la regla",
+                              ),
+                            ),
+                          )
+                      : save({
+                          ...ops,
+                          rules: ops.rules.map((x) =>
+                            x.id === r.id
+                              ? { ...x, active: e.target.checked }
+                              : x,
+                          ),
+                        })
                   }
                 />
               </label>
-              {configured && user && <><button onClick={()=>{const name=prompt(tx(lang,"Rule name","Nombre de regla"),r.name);if(name)automationsRepository.update(r.id,{name}).then(saved=>setRules(all=>all.map(x=>x.id===r.id?saved:x))).catch(()=>notify(tx(lang,"Unable to update automation rule","No se pudo actualizar la regla")))}}>{tx(lang,"Edit","Editar")}</button><button onClick={()=>{if(confirm(tx(lang,"Delete this rule?","¿Eliminar esta regla?")))automationsRepository.remove(r.id).then(()=>setRules(all=>all.filter(x=>x.id!==r.id))).catch(()=>notify(tx(lang,"Unable to delete automation rule","No se pudo eliminar la regla")))}}><Trash2 size={15}/></button></>}
+              {configured && user && (
+                <>
+                  <button
+                    onClick={() => {
+                      const name = prompt(
+                        tx(lang, "Rule name", "Nombre de regla"),
+                        r.name,
+                      );
+                      if (name)
+                        automationsRepository
+                          .update(r.id, { name })
+                          .then((saved) =>
+                            setRules((all) =>
+                              all.map((x) => (x.id === r.id ? saved : x)),
+                            ),
+                          )
+                          .catch(() =>
+                            notify(
+                              tx(
+                                lang,
+                                "Unable to update automation rule",
+                                "No se pudo actualizar la regla",
+                              ),
+                            ),
+                          );
+                    }}
+                  >
+                    {tx(lang, "Edit", "Editar")}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (
+                        confirm(
+                          tx(
+                            lang,
+                            "Delete this rule?",
+                            "¿Eliminar esta regla?",
+                          ),
+                        )
+                      )
+                        automationsRepository
+                          .remove(r.id)
+                          .then(() =>
+                            setRules((all) => all.filter((x) => x.id !== r.id)),
+                          )
+                          .catch(() =>
+                            notify(
+                              tx(
+                                lang,
+                                "Unable to delete automation rule",
+                                "No se pudo eliminar la regla",
+                              ),
+                            ),
+                          );
+                    }}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </>
+              )}</div>
             </article>
           ))}
           {!(configured && user ? rules : ops.rules).length && (

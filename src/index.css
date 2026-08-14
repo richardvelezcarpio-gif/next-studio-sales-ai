@@ -887,7 +887,9 @@ td small {
 .task-delete:hover {
   background: #fff3f3;
 }
+.followup-card,.automation-card{display:flex!important;justify-content:space-between;align-items:flex-start;gap:18px;padding:18px!important;border:1px solid #e4edf6!important;border-radius:14px;background:#fff;box-shadow:0 5px 16px #14345e0a}.followup-card__content,.automation-card__content{display:grid;gap:7px;min-width:0}.followup-card__content b,.automation-card__content b{font:700 16px Manrope;color:#1d2f4c}.followup-card__content span{color:#0874d1;font-size:12px;font-weight:700;text-transform:capitalize}.followup-card__content small,.automation-card__content small{color:#687990;line-height:1.45}.followup-card__actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;flex-shrink:0}.automation-card__controls{display:grid;justify-items:end;gap:14px;flex-shrink:0}.automation-card .toggle{background:#edf5fc;border-radius:999px;padding:5px 9px;gap:8px}.automation-card .toggle input{accent-color:#0874d1}.automation-card__content span:first-of-type{font-weight:700;color:#0874d1}.automation-card__content span{display:block;margin-top:3px}.automation-card__content small{display:block;margin-top:7px}
 @media (max-width: 760px) {
+  .followup-card,.automation-card{flex-direction:column}.followup-card__actions,.automation-card__controls{width:100%;justify-content:flex-start;justify-items:start}.followup-card__actions button{flex:1}
   .task-card {
     align-items: flex-start;
     flex-direction: column;
