@@ -8,3 +8,6 @@ export interface Activity { id:string; leadId?:string; title:string; createdAt:s
 export interface FollowUp { id:string; leadId:string; date:string; reason:string; notes:string; completed:boolean }
 export interface Template { id:string; category:string; name:string; en:string; es:string; custom?:boolean }
 export interface SalesGoal { monthlyRevenue:number; monthlyDeals:number } export interface Settings { name:string; company:string; phone:string; email:string; website:string; digitalCardUrl:string; bookingUrl:string; currency:string; landingUrls:Partial<Record<Service,string>>; goals?:SalesGoal }
+export interface CommunicationMessage {id:string; prospectId:string; channel:'email'|'whatsapp'|'call'; direction:'outbound'|'internal'; content:string; subject?:string; status:'draft'|'sent'|'failed'; createdAt:string; provider:'local'|'gmail'|'manual'}
+export interface Task {id:string; prospectId?:string; title:string; dueDate:string; priority:'critical'|'high'|'medium'|'low'; status:'open'|'completed'; source:'manual'|'followup'|'automation'|'ai'; createdAt:string}
+export interface AutomationRule {id:string; name:string; trigger:string; condition:string; action:string; active:boolean; lastRun?:string; timesTriggered:number}
