@@ -47,6 +47,7 @@ import { ActivityTimeline } from "./components/ActivityTimeline";
 import { MarkLostModal, MarkWonModal } from "./components/DealClosingModals";
 import { salesActions } from "./services/sales/nextBestAction";
 import { closeProbability } from "./services/sales/closeProbability";
+import { DashboardForecast, ForecastPage } from "./components/RevenueForecast";
 const id = () => crypto.randomUUID();
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (n = 0) =>
@@ -129,6 +130,7 @@ function App() {
             element={<Dashboard db={db} lang={lang} />}
           />
           <Route path="/actions" element={<SalesActions db={db} lang={lang} />} />
+          <Route path="/forecast" element={<ForecastPage leads={db.leads} lang={lang} />} />
           <Route
             path="/leads"
             element={<Leads db={db} save={save} lang={lang} notify={notify} />}
@@ -205,6 +207,7 @@ function Shell({
     ["/dashboard", "dashboard", BarChart3],
     ["/leads", "leads", Users],
     ["/pipeline", "pipeline", Columns3],
+    ["/forecast", "Forecast", BarChart3],
     ["/follow-ups", "followups", Clock3],
     ["/tasks", "Tasks", Check],
     ["/communications", "Communications", Mail],
@@ -231,7 +234,7 @@ function Shell({
           {nav.map(([to, key, Icon]) => (
             <NavLink key={to} to={to} onClick={() => setMobile(false)}>
               <Icon size={19} />
-              {["AI Center", "Tasks", "Communications", "Automations"].includes(
+              {["AI Center", "Tasks", "Communications", "Automations", "Forecast"].includes(
                 key,
               )
                 ? key
@@ -348,6 +351,7 @@ function Dashboard({
         {recommendations.length ? <div className="follow-list">{recommendations.map(a=>{const l=db.leads.find(x=>x.id===a.prospectId);return <article key={a.prospectId}><div><b>{l?.firstName} {l?.lastName}</b><span>{a.recommendation} · {money(a.potentialValue)}</span></div><button onClick={()=>nav('/leads/'+a.prospectId)}>{lang==='es'?'Abrir':'Open'}</button></article>})}</div> : <p>{lang==='es'?'Todo está al día.':'You’re all caught up.'}</p>}
         <button onClick={()=>nav('/actions')}>{lang==='es'?'Ver todas las acciones':'View All Sales Actions'}</button>
       </Panel>
+      <DashboardForecast leads={db.leads} lang={lang} />
       <Panel title={t(lang, "activity")}>
         <div className="timeline">
           {db.activities.slice(0, 6).map((a) => (
