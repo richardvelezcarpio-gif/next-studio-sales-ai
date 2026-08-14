@@ -1,22 +1,7 @@
 import type { BrandKit, CreativeGenerationRequest } from "./creativeTypes";
 import { formatSpecs } from "./creativeTypes";
 
-const ctaFallbacks = {
-  en: { leads: "Get a Quote", service: "Learn More", promotion: "Claim Offer", event: "Book Now", card: "Get Yours", default: "View Details" },
-  es: { leads: "Cotiza Ahora", service: "Ver Servicio", promotion: "Aprovecha la Oferta", event: "Reserva Ahora", card: "Obtén la Tuya", default: "Ver Detalles" },
-} as const;
-
-export const resolveCreativeCta = (request: CreativeGenerationRequest, brand?: BrandKit | null) => {
-  if (request.cta?.trim()) return request.cta.trim();
-  if (brand?.defaultCta?.trim() && brand.defaultCta !== "Get Started") return brand.defaultCta.trim();
-  const options = ctaFallbacks[request.language];
-  if (request.creativeType === "promotion" || request.goal === "promotion") return options.promotion;
-  if (request.creativeType === "service") return options.service;
-  if (request.creativeType === "event" || request.goal === "event") return options.event;
-  if (request.service?.toLowerCase().includes("card")) return options.card;
-  if (request.goal === "leads" || request.creativeType === "lead_generation") return options.leads;
-  return options.default;
-};
+export const resolveCreativeCta = (request: CreativeGenerationRequest, _brand?: BrandKit | null) => request.cta?.trim() || "";
 
 export const enhanceVisualDirection = (direction?: string, service?: string) => {
   const intent = direction?.trim() || service?.trim() || "a modern business solution";
