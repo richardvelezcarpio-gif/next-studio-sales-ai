@@ -9,6 +9,7 @@ import { brandKitsRepository } from "../../services/db/brandKits";
 import { creativeAssetsRepository } from "../../services/db/creativeAssets";
 import { creativeStorage } from "../../services/storage/creativeStorage";
 import { requestOpenAI } from "../../services/ai/openAISalesAI";
+import { servicesRepository, type CloudService } from "../../services/db/services";
 
 const text = (lang: Language, en: string, es: string) => lang === "es" ? es : en;
 const defaultBrand: BrandKit = { id: "", name: "Next Studio", primaryColor: "#0874d1", secondaryColor: "#0f2a54", accentColor: "#48b6e8", backgroundColor: "#ffffff", website: "", defaultCta: "Get Started", visualStyle: "Premium", notes: "" };
@@ -17,7 +18,7 @@ const creativeTypes = ["social_post", "promotion", "service", "facebook_ad", "in
 const styles = ["premium", "clean", "modern", "technology", "elegant", "corporate", "bold", "minimal", "luxury", "energetic", "friendly"] as const;
 const templates = ["Next Studio Premium", "Clean SaaS", "Bold Promotion", "Minimal Business", "Technology Launch"];
 
-async function compose(imageUrl: string, request: CreativeGenerationRequest, brand: BrandKit) {
+async function compose(imageUrl: string, request: CreativeGenerationRequest, brand: BrandKit, logoUrl?: string) {
   const spec = formatSpecs[request.format];
   const source = new Image();
   source.src = imageUrl;
@@ -43,11 +44,13 @@ async function compose(imageUrl: string, request: CreativeGenerationRequest, bra
     context.fillStyle = brand.accentColor; context.fillRect(spec.width * .07, spec.height * .82, spec.width * .38, spec.height * .075);
     context.fillStyle = "#09254a"; context.font = `700 ${Math.round(spec.width * .03)}px sans-serif`;
     context.fillText((request.cta || brand.defaultCta || "Get Started").slice(0, 25), spec.width * .1, spec.height * .87);
+    if (logoUrl) { try { const logo = new Image(); logo.src = logoUrl; await new Promise<void>((resolve,reject)=>{logo.onload=()=>resolve();logo.onerror=()=>reject(new Error("logo"))}); const ratio=Math.min(spec.width*.16/logo.width,spec.height*.09/logo.height); context.drawImage(logo,spec.width*.77,spec.height*.06,logo.width*ratio,logo.height*ratio); } catch { context.fillStyle="#fff";context.font=`600 ${Math.round(spec.width*.025)}px sans-serif`;context.fillText(brand.name,spec.width*.07,spec.height*.95); } }
+    else { context.fillStyle="#fff";context.font=`600 ${Math.round(spec.width*.025)}px sans-serif`;context.fillText(brand.name,spec.width*.07,spec.height*.95); }
   }
   return new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Unable to compose creative")), "image/png"));
 }
 
-export function CreativeStudio({ lang }: { leads: Lead[]; lang: Language }) {
+export function CreativeStudio({ leads, lang }: { leads: Lead[]; lang: Language }) {
   const { configured, user } = useAuth();
   const [tab, setTab] = useState<"create" | "generated" | "brand" | "templates">("create");
   const [request, setRequest] = useState<CreativeGenerationRequest>({ ...defaultRequest, language: lang });
@@ -63,15 +66,16 @@ export function CreativeStudio({ lang }: { leads: Lead[]; lang: Language }) {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [filter, setFilter] = useState("all");
   const [selectedAsset, setSelectedAsset] = useState<CreativeAsset | null>(null);
+  const [services, setServices] = useState<CloudService[]>([]);
   const [error, setError] = useState("");
   const update = (patch: Partial<CreativeGenerationRequest>) => setRequest((current) => ({ ...current, ...patch }));
 
   const load = useCallback(async () => {
     if (!configured || !user) return;
     try {
-      const [kits, items] = await Promise.all([brandKitsRepository.getAll(), creativeAssetsRepository.getAll()]);
+      const [kits, items, cloudServices] = await Promise.all([brandKitsRepository.getAll(), creativeAssetsRepository.getAll(), servicesRepository.getAll()]);
       const kit = kits[0] || await brandKitsRepository.create(defaultBrand);
-      setBrand(kit); setAssets(items);
+      setBrand(kit); setAssets(items); setServices(cloudServices);
       if (kit.logoPath) setLogoUrl(await creativeStorage.signedUrl(kit.logoPath)); else setLogoUrl("");
       const signed = await Promise.all(items.map(async (asset) => [asset.id, await creativeStorage.signedUrl(asset.storagePath)] as const));
       setUrls(Object.fromEntries(signed));
@@ -82,10 +86,10 @@ export function CreativeStudio({ lang }: { leads: Lead[]; lang: Language }) {
   const generateOne = async (target: CreativeGenerationRequest, source?: CreativeAsset) => {
     const targetPrompt = source?.prompt || buildCreativePrompt(target, brand);
     const generated = await generateCreativeImage(targetPrompt, target);
-    const blob = await compose(generated.image, target, brand);
+    const blob = await compose(generated.image, target, brand, logoUrl);
     const storagePath = await creativeStorage.upload(crypto.randomUUID(), blob);
     const spec = formatSpecs[target.format];
-    const asset = await creativeAssetsRepository.create({ creativeType: target.creativeType, format: target.format, aspectRatio: spec.ratio, width: spec.width, height: spec.height, prompt: targetPrompt, headline: target.hook || null, supportingText: target.offer || null, cta: target.cta || null, storagePath, mimeType: "image/png", provider: generated.provider, model: generated.model, status: "ready", brandKitId: source?.brandKitId || brand.id || null, serviceId: source?.serviceId || null, prospectId: source?.prospectId || null });
+    const asset = await creativeAssetsRepository.create({ creativeType: target.creativeType, format: target.format, aspectRatio: spec.ratio, width: spec.width, height: spec.height, prompt: targetPrompt, headline: target.hook || null, supportingText: target.offer || null, cta: target.cta || null, storagePath, mimeType: "image/png", provider: generated.provider, model: generated.model, status: "ready", brandKitId: source?.brandKitId || brand.id || null, serviceId: source?.serviceId || target.serviceId || null, prospectId: source?.prospectId || target.prospectId || null });
     const localUrl = URL.createObjectURL(blob);
     setAssets((current) => [asset, ...current]);
     setUrls((current) => ({ ...current, [asset.id]: localUrl }));
@@ -143,7 +147,7 @@ export function CreativeStudio({ lang }: { leads: Lead[]; lang: Language }) {
     catch { setError(text(lang, "Unable to remove the logo.", "No se pudo eliminar el logo.")); }
   };
   const duplicate = (asset: CreativeAsset) => {
-    update({ creativeType: asset.creativeType, format: asset.format, hook: asset.headline || "", offer: asset.supportingText || "", cta: asset.cta || "", visualDirection: asset.prompt });
+    update({ creativeType: asset.creativeType, format: asset.format, hook: asset.headline || "", offer: asset.supportingText || "", cta: asset.cta || "", visualDirection: asset.prompt, serviceId: asset.serviceId || undefined, prospectId: asset.prospectId || undefined });
     setSelectedAsset(null); setTab("create");
   };
   const visibleAssets = assets.filter((asset) => filter === "all" || (filter === "ad" ? asset.creativeType.includes("ad") : filter === "format" ? true : asset.creativeType === filter || asset.format === filter));
@@ -158,6 +162,8 @@ export function CreativeStudio({ lang }: { leads: Lead[]; lang: Language }) {
       <label>{text(lang, "Format", "Formato")}<select value={request.format} onChange={(event) => update({ format: event.target.value as any })}>{Object.entries(formatSpecs).map(([item, spec]) => <option key={item} value={item}>{item} · {spec.ratio}</option>)}</select></label>
       <label>{text(lang, "Style", "Estilo")}<select value={request.style} onChange={(event) => update({ style: event.target.value as any })}>{styles.map((item) => <option key={item}>{item}</option>)}</select></label>
       <label>{text(lang, "Mode", "Modo")}<select value={request.mode} onChange={(event) => update({ mode: event.target.value as any })}><option value="marketing">Marketing Creative</option><option value="visual">AI Visual</option></select></label>
+      <label>{text(lang,"Service","Servicio")}<select value={request.serviceId||""} onChange={(event)=>{const service=services.find(x=>x.id===event.target.value);update({serviceId:service?.id,service:service?.name,offer:request.offer||service?.description})}}><option value="">{text(lang,"None","Ninguno")}</option>{services.map(service=><option key={service.id} value={service.id}>{service.name}{service.defaultPrice!=null?` · $${service.defaultPrice}`:""}</option>)}</select></label>
+      <label>{text(lang,"Prospect","Prospecto")}<select value={request.prospectId||""} onChange={(event)=>update({prospectId:event.target.value||undefined})}><option value="">{text(lang,"None","Ninguno")}</option>{leads.map(lead=><option key={lead.id} value={lead.id}>{lead.firstName} {lead.lastName}{lead.business?` · ${lead.business}`:""}</option>)}</select></label>
       <label>{text(lang, "Main Hook", "Hook")}<input maxLength={70} value={request.hook || ""} onChange={(event) => update({ hook: event.target.value })} /></label>
       <label>{text(lang, "Offer / supporting text", "Oferta / texto")}<input maxLength={110} value={request.offer || ""} onChange={(event) => update({ offer: event.target.value })} /></label>
       <label>CTA<input value={request.cta || ""} onChange={(event) => update({ cta: event.target.value })} /></label>
