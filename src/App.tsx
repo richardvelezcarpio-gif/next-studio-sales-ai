@@ -42,6 +42,7 @@ import {
 } from "./services/db/followUps";
 import { useAuth } from "./auth/AuthProvider";
 import { AIMessageAssistant } from "./components/AIMessageAssistant";
+import { QuickFollowUp, QuickTask } from "./components/QuickActions";
 import { salesActions } from "./services/sales/nextBestAction";
 const id = () => crypto.randomUUID();
 const today = () => new Date().toISOString().slice(0, 10);
@@ -352,7 +353,7 @@ function Dashboard({
     </>
   );
 }
-function SalesActions({db,lang}:{db:ReturnType<typeof storage.get>;lang:Language}){const nav=useNavigate(),actions=salesActions(db.leads);const [prospect,setProspect]=useState<Lead>();return <><PageTitle title={lang==='es'?'Centro de Acciones':'Sales Action Center'}/><section className="panel"><div className="sales-actions">{actions.map(a=>{const lead=db.leads.find(l=>l.id===a.prospectId);return <article className="sales-action-card" key={a.prospectId}><span className={`task-badge priority-${a.priority}`}>{a.priority}</span><div><b>{lead?`${lead.firstName} ${lead.lastName}`:''}</b><p>{a.reason}</p><small>{a.recommendation} · {money(a.potentialValue)}</small></div><div className="button-row"><button className="primary" onClick={()=>nav('/leads/'+a.prospectId)}>{lang==='es'?'Abrir prospecto':'Open Prospect'}</button>{lead&&<button onClick={()=>setProspect(lead)}>{lang==='es'?'Preparar mensaje':'Draft Message'}</button>}</div></article>})}{!actions.length&&<p>{lang==='es'?'Todo está al día.':'You’re all caught up.'}</p>}</div></section>{prospect&&<AIMessageAssistant prospect={prospect} open onClose={()=>setProspect(undefined)} lang={lang}/>}</>}
+function SalesActions({db,lang}:{db:ReturnType<typeof storage.get>;lang:Language}){const nav=useNavigate(),actions=salesActions(db.leads);const [prospect,setProspect]=useState<Lead>();const [task,setTask]=useState<Lead>();const [follow,setFollow]=useState<Lead>();return <><PageTitle title={lang==='es'?'Centro de Acciones':'Sales Action Center'}/><section className="panel"><div className="sales-actions">{actions.map(a=>{const lead=db.leads.find(l=>l.id===a.prospectId);return <article className="sales-action-card" key={a.prospectId}><span className={`task-badge priority-${a.priority}`}>{a.priority}</span><div><b>{lead?`${lead.firstName} ${lead.lastName}`:''}</b><p>{a.reason}</p><small>{a.recommendation} · {money(a.potentialValue)}</small></div><div className="button-row"><button className="primary" onClick={()=>nav('/leads/'+a.prospectId)}>{lang==='es'?'Abrir prospecto':'Open Prospect'}</button>{lead&&<><button onClick={()=>setTask(lead)}>{lang==='es'?'Crear Tarea':'Create Task'}</button><button onClick={()=>setFollow(lead)}>{lang==='es'?'Crear Seguimiento':'Create Follow-up'}</button><button onClick={()=>setProspect(lead)}>{lang==='es'?'Preparar mensaje':'Draft Message'}</button></>}</div></article>})}{!actions.length&&<p>{lang==='es'?'Todo está al día.':'You’re all caught up.'}</p>}</div></section>{prospect&&<AIMessageAssistant prospect={prospect} open onClose={()=>setProspect(undefined)} lang={lang}/>} {task&&<QuickTask prospect={task} lang={lang} onClose={()=>setTask(undefined)}/>} {follow&&<QuickFollowUp prospect={follow} lang={lang} onClose={()=>setFollow(undefined)}/>}</>}
 function PageTitle({
   title,
   children,
@@ -789,6 +790,8 @@ function Detail({
   const lead = db.leads.find((l) => l.id === leadId);
   const [note, setNote] = useState("");
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [quickTaskOpen, setQuickTaskOpen] = useState(false);
+  const [quickFollowOpen, setQuickFollowOpen] = useState(false);
   if (!lead) return <Empty lang={lang} />;
   const recommendation = salesActions([lead])[0];
   const message = (cat: string) => {
@@ -863,7 +866,7 @@ function Detail({
       </section>
       <div className="detail-grid">
         <div>
-          {recommendation && <Panel title={lang==='es'?'Próxima Mejor Acción':'Next Best Action'}><div className="ai-note"><b>{recommendation.priority.toUpperCase()}</b><p>{recommendation.recommendation}</p><small>{recommendation.reason} · {money(recommendation.potentialValue)}</small></div><div className="button-row"><button onClick={()=>nav('/follow-ups')}>{lang==='es'?'Crear seguimiento':'Create Follow-up'}</button><button onClick={()=>nav('/tasks')}>{lang==='es'?'Crear tarea':'Create Task'}</button>{lead.phone&&<button onClick={()=>window.open(`https://wa.me/${(lead.whatsapp||lead.phone).replace(/\D/g,'')}`)}>WhatsApp</button>}{lead.email&&<button onClick={()=>window.open(`mailto:${lead.email}`)}>Email</button>}</div></Panel>}
+          {recommendation && <Panel title={lang==='es'?'Próxima Mejor Acción':'Next Best Action'}><div className="ai-note"><b>{recommendation.priority.toUpperCase()}</b><p>{recommendation.recommendation}</p><small>{recommendation.reason} · {money(recommendation.potentialValue)}</small></div><div className="button-row"><button onClick={()=>setQuickFollowOpen(true)}>{lang==='es'?'Crear seguimiento':'Create Follow-up'}</button><button onClick={()=>setQuickTaskOpen(true)}>{lang==='es'?'Crear tarea':'Create Task'}</button>{lead.phone&&<button onClick={()=>window.open(`https://wa.me/${(lead.whatsapp||lead.phone).replace(/\D/g,'')}`)}>WhatsApp</button>}{lead.email&&<button onClick={()=>window.open(`mailto:${lead.email}`)}>Email</button>}</div></Panel>}
           {recommendation && <Panel title={lang==='es'?'Próxima Mejor Acción':'Next Best Action'}><button onClick={()=>setAssistantOpen(true)}>{lang==='es'?'Preparar mensaje':'Draft Message'}</button></Panel>}
           <Panel title={t(lang, "actions")}>
             <div className="action-grid">
@@ -1066,6 +1069,7 @@ function Detail({
         </div>
       </div>
       <AIMessageAssistant prospect={lead} open={assistantOpen} onClose={()=>setAssistantOpen(false)} lang={lang}/>
+      {quickTaskOpen&&<QuickTask prospect={lead} lang={lang} onClose={()=>setQuickTaskOpen(false)}/>} {quickFollowOpen&&<QuickFollowUp prospect={lead} lang={lang} onClose={()=>setQuickFollowOpen(false)}/>}
     </>
   );
 }
