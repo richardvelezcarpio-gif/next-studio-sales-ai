@@ -30,3 +30,7 @@ npm run dev
 ## OpenAI (Phase 3)
 
 The browser never receives an API key. For a Vercel deployment, set `OPENAI_API_KEY` in the server environment. The serverless endpoint at `api/ai.ts` uses the Responses API and returns a safe local-fallback status whenever the key is absent, the request times out, or the response is invalid. Copy `.env.example` only for local server configuration; never commit a real `.env` file.
+
+## Supabase (Phase 5)
+
+Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the deployment environment, then apply the ordered SQL files in `supabase/migrations/`. The anon key is used only with Row Level Security enabled; no service-role key, OAuth token, or secret is stored in the browser or local storage. Without Supabase configuration the secure sign-in screen reports configuration status and does not pretend cloud data is available.
