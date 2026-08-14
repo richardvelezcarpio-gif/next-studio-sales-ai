@@ -58,6 +58,7 @@ export function CreativeStudio({ lang }: { leads: Lead[]; lang: Language }) {
   const [busy, setBusy] = useState(false);
   const [campaignProgress, setCampaignProgress] = useState("");
   const [campaignIds, setCampaignIds] = useState<string[]>([]);
+  const [regeneratingId, setRegeneratingId] = useState("");
   const [error, setError] = useState("");
   const update = (patch: Partial<CreativeGenerationRequest>) => setRequest((current) => ({ ...current, ...patch }));
 
@@ -73,13 +74,13 @@ export function CreativeStudio({ lang }: { leads: Lead[]; lang: Language }) {
   }, [configured, lang, user]);
   useEffect(() => { load(); }, [load]);
 
-  const generateOne = async (target: CreativeGenerationRequest) => {
-    const targetPrompt = buildCreativePrompt(target, brand);
+  const generateOne = async (target: CreativeGenerationRequest, source?: CreativeAsset) => {
+    const targetPrompt = source?.prompt || buildCreativePrompt(target, brand);
     const generated = await generateCreativeImage(targetPrompt, target);
     const blob = await compose(generated.image, target, brand);
     const storagePath = await creativeStorage.upload(crypto.randomUUID(), blob);
     const spec = formatSpecs[target.format];
-    const asset = await creativeAssetsRepository.create({ creativeType: target.creativeType, format: target.format, aspectRatio: spec.ratio, width: spec.width, height: spec.height, prompt: targetPrompt, headline: target.hook || null, supportingText: target.offer || null, cta: target.cta || null, storagePath, mimeType: "image/png", provider: generated.provider, model: generated.model, status: "ready", brandKitId: brand.id || null });
+    const asset = await creativeAssetsRepository.create({ creativeType: target.creativeType, format: target.format, aspectRatio: spec.ratio, width: spec.width, height: spec.height, prompt: targetPrompt, headline: target.hook || null, supportingText: target.offer || null, cta: target.cta || null, storagePath, mimeType: "image/png", provider: generated.provider, model: generated.model, status: "ready", brandKitId: source?.brandKitId || brand.id || null, serviceId: source?.serviceId || null, prospectId: source?.prospectId || null });
     const localUrl = URL.createObjectURL(blob);
     setAssets((current) => [asset, ...current]);
     setUrls((current) => ({ ...current, [asset.id]: localUrl }));
@@ -108,6 +109,14 @@ export function CreativeStudio({ lang }: { leads: Lead[]; lang: Language }) {
     setCampaignIds(completed); setCampaignProgress(""); setBusy(false); setTab("generated");
     if (failed.length) setError(text(lang, `${completed.length} of 3 generated successfully. Retry: ${failed.join(", ")}.`, `${completed.length} de 3 se generaron correctamente. Reintenta: ${failed.join(", ")}.`));
   };
+  const regenerate = async (asset: CreativeAsset) => {
+    if (busy || regeneratingId) return;
+    setRegeneratingId(asset.id); setError("");
+    try {
+      await generateOne({ ...request, creativeType: asset.creativeType, format: asset.format, hook: asset.headline || "", offer: asset.supportingText || "", cta: asset.cta || brand.defaultCta || "" }, asset);
+    } catch { setError(text(lang, "Unable to regenerate this creative. Please try again.", "No se pudo regenerar este creativo. Inténtalo nuevamente.")); }
+    finally { setRegeneratingId(""); }
+  };
   const remove = async (asset: CreativeAsset) => {
     if (!confirm(text(lang, "Delete this creative?", "¿Eliminar este creativo?"))) return;
     try { await creativeStorage.remove(asset.storagePath); await creativeAssetsRepository.remove(asset.id); setAssets((current) => current.filter((item) => item.id !== asset.id)); }
@@ -135,7 +144,7 @@ export function CreativeStudio({ lang }: { leads: Lead[]; lang: Language }) {
       <button onClick={help}>{text(lang, "Help Me Create", "Ayúdame a Crear")}</button>
       <button disabled={busy} onClick={generateCampaignPack}>{busy && campaignProgress ? `${text(lang, "Generating Campaign Pack...", "Generando Paquete de Campaña...")} ${campaignProgress}` : text(lang, "Generate Campaign Pack", "Generar Paquete de Campaña")}</button>
     </section><section className={`creative-preview ${request.format}`}>{preview && <img src={preview} />}<div className="creative-overlay"><b>{request.hook || brand.name}</b><span>{request.offer}</span><em>{request.cta || brand.defaultCta}</em></div></section></div>}
-    {tab === "generated" && <section className="creative-history">{assets.length ? assets.map((asset) => <article className={`creative-card ${campaignIds.includes(asset.id) ? "campaign-asset" : ""}`} key={asset.id}>{urls[asset.id] && <img src={urls[asset.id]} />}<b>{asset.creativeType.replace(/_/g, " ")}</b><small>{asset.format} · {new Date(asset.createdAt).toLocaleDateString()} · {asset.provider}</small><div><button onClick={() => download(asset)}><Download size={15} /></button><button onClick={() => { update({ format: asset.format, hook: asset.headline || "", offer: asset.supportingText || "", cta: asset.cta || "" }); setTab("create"); }}>{text(lang, "Variation", "Variación")}</button><button onClick={() => caption(asset)}>{text(lang, "Caption", "Caption")}</button><button onClick={() => navigator.clipboard.writeText(asset.caption || "")}><Copy size={15} /></button><button className="danger" onClick={() => remove(asset)}><Trash2 size={15} /></button></div></article>) : <p>{text(lang, "Create your first AI-powered marketing creative.", "Crea tu primer creativo de marketing con IA.")}</p>}</section>}
+    {tab === "generated" && <section className="creative-history">{assets.length ? assets.map((asset) => <article className={`creative-card ${campaignIds.includes(asset.id) ? "campaign-asset" : ""}`} key={asset.id}>{urls[asset.id] && <img src={urls[asset.id]} />}<b>{asset.creativeType.replace(/_/g, " ")}</b><small>{asset.format} · {new Date(asset.createdAt).toLocaleDateString()} · {asset.provider}</small><div><button onClick={() => download(asset)}><Download size={15} /></button><button disabled={Boolean(regeneratingId)} onClick={() => regenerate(asset)}>{regeneratingId === asset.id ? text(lang, "Regenerating...", "Regenerando...") : text(lang, "Regenerate", "Regenerar")}</button><button onClick={() => { update({ format: asset.format, hook: asset.headline || "", offer: asset.supportingText || "", cta: asset.cta || "" }); setTab("create"); }}>{text(lang, "Variation", "Variación")}</button><button onClick={() => caption(asset)}>{text(lang, "Caption", "Caption")}</button><button onClick={() => navigator.clipboard.writeText(asset.caption || "")}><Copy size={15} /></button><button className="danger" onClick={() => remove(asset)}><Trash2 size={15} /></button></div></article>) : <p>{text(lang, "Create your first AI-powered marketing creative.", "Crea tu primer creativo de marketing con IA.")}</p>}</section>}
     {tab === "brand" && <section className="panel"><h2>{text(lang, "Brand Kit", "Kit de Marca")}</h2><div className="form-grid">{(["name", "primaryColor", "secondaryColor", "accentColor", "backgroundColor", "website", "defaultCta", "visualStyle", "notes"] as const).map((key) => <label key={key}>{key}<input value={brand[key] || ""} onChange={(event) => setBrand((current) => ({ ...current, [key]: event.target.value }))} /></label>)}</div><button className="primary" onClick={saveBrand}>{text(lang, "Save", "Guardar")}</button></section>}
     {tab === "templates" && <section className="template-grid">{templates.map((template) => <article className="template" key={template}><span>{template}</span><h3>{text(lang, "Adaptable social layout", "Diseño social adaptable")}</h3><button onClick={() => { update({ template }); setTab("create"); }}>{text(lang, "Use template", "Usar plantilla")}</button></article>)}</section>}
   </>;
