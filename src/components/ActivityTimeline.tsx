@@ -5,7 +5,7 @@ import { followUpsRepository } from "../services/db/followUps";
 import { communicationsRepository } from "../services/db/communications";
 export type ActivityTimelineItem = {
   id: string;
-  type: "prospect_created" | "task" | "follow_up" | "communication" | "draft";
+  type: "prospect_created" | "task" | "follow_up" | "communication" | "draft" | "deal_won" | "deal_lost";
   title: string;
   description?: string;
   timestamp: string;
@@ -42,6 +42,24 @@ export function ActivityTimeline({
               timestamp: prospect.createdAt,
               source: "prospect",
             },
+            ...(prospect.wonAt ? [{
+              id: `won-${prospect.id}`,
+              type: "deal_won" as const,
+              title: lang === "es" ? "Venta Ganada" : "Deal Won",
+              description: `${lang === "es" ? "Valor" : "Value"}: ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(prospect.potentialValue)}${prospect.closingNotes ? ` · ${prospect.closingNotes}` : ""}`,
+              timestamp: prospect.wonAt,
+              status: "won",
+              source: "prospect",
+            }] : []),
+            ...(prospect.lostAt ? [{
+              id: `lost-${prospect.id}`,
+              type: "deal_lost" as const,
+              title: lang === "es" ? "Venta Perdida" : "Deal Lost",
+              description: [prospect.competitor && `${lang === "es" ? "Competidor" : "Competitor"}: ${prospect.competitor}`, prospect.closingNotes].filter(Boolean).join(" · ") || undefined,
+              timestamp: prospect.lostAt,
+              status: "lost",
+              source: "prospect",
+            }] : []),
             ...tasks.map((t) => ({
               id: `task-${t.id}`,
               type: "task" as const,
@@ -92,7 +110,7 @@ export function ActivityTimeline({
         ),
       )
       .finally(() => setLoading(false));
-  }, [prospect.id, prospect.createdAt, refreshKey, lang]);
+  }, [prospect.id, prospect.createdAt, prospect.wonAt, prospect.lostAt, prospect.closingNotes, prospect.competitor, prospect.potentialValue, refreshKey, lang]);
   if (loading)
     return (
       <p>{lang === "es" ? "Cargando actividad..." : "Loading activity..."}</p>

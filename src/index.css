@@ -683,6 +683,8 @@ td small {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+.forecast-kpis{grid-template-columns:repeat(5,1fr)}.forecast-goal .goal-form{display:flex;align-items:end;gap:12px;margin-bottom:16px}.goal-form label{flex:1;color:#65738a;font-size:12px}.goal-form label span{display:block;margin-bottom:5px}.goal-stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}.goal-stats span{background:#f7faff;border:1px solid #e4edf8;border-radius:9px;color:#728098;font-size:11px;padding:10px}.goal-stats b{color:#1c3456;display:block;font:800 15px Manrope;margin-top:4px}.forecast-list article{align-items:center;border-bottom:1px solid #edf1f6;display:grid;gap:10px;grid-template-columns:minmax(140px,1fr) auto auto auto auto;padding:12px 0}.forecast-list article:last-child{border-bottom:0}.forecast-list small{color:#748198;display:block;font-size:11px;margin-top:3px}.forecast-list span{color:#49627f;font-size:12px;white-space:nowrap}.forecast-list button{border:1px solid #dce5f0}.dashboard-forecast .compact{grid-template-columns:repeat(3,1fr);margin-bottom:14px}.forecast-loading{color:#748198;text-align:center}
+.closing-coach{margin-bottom:18px}.coach-advice{display:grid;gap:10px}.coach-advice>div{background:#f7faff;border:1px solid #e3edf8;border-radius:10px;padding:11px 12px}.coach-advice b{color:#0d63b5;font-size:12px}.coach-advice p{color:#52637c;line-height:1.45;margin-top:4px}.closing-coach footer{align-items:center;border-top:1px solid #edf1f6;display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:14px}.closing-coach footer small{color:#718099}.deal-insights-kpis{grid-template-columns:repeat(5,1fr)}
 @media (max-width: 760px) {
   .side {
     transform: translateX(-100%);
@@ -904,4 +906,6 @@ td small {
   .task-card__meta {
     gap: 6px;
   }
+  .forecast-kpis{grid-template-columns:repeat(2,1fr)}.goal-stats{grid-template-columns:repeat(2,1fr)}.forecast-goal .goal-form{align-items:stretch;flex-direction:column}.forecast-list article{align-items:start;grid-template-columns:minmax(0,1fr) auto}.forecast-list article span{grid-column:1}.forecast-list article button{grid-column:2;grid-row:1/span 3}
+  .deal-insights-kpis{grid-template-columns:repeat(2,1fr)}.closing-coach footer button{width:100%}
 }
