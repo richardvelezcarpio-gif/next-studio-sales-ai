@@ -41,6 +41,8 @@ import {
   type CloudFollowUp,
 } from "./services/db/followUps";
 import { useAuth } from "./auth/AuthProvider";
+import { AIMessageAssistant } from "./components/AIMessageAssistant";
+import { salesActions } from "./services/sales/nextBestAction";
 const id = () => crypto.randomUUID();
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (n = 0) =>
@@ -113,6 +115,7 @@ function App() {
             path="/dashboard"
             element={<Dashboard db={db} lang={lang} />}
           />
+          <Route path="/actions" element={<SalesActions db={db} lang={lang} />} />
           <Route
             path="/leads"
             element={<Leads db={db} save={save} lang={lang} notify={notify} />}
@@ -258,6 +261,8 @@ function Dashboard({
   db: ReturnType<typeof storage.get>;
   lang: Language;
 }) {
+  const nav = useNavigate();
+  const recommendations = salesActions(db.leads).slice(0, 5);
   const count = (s: Stage) => db.leads.filter((l) => l.stage === s).length;
   const cards = [
     [t(lang, "total"), db.leads.length, Users],
@@ -326,6 +331,10 @@ function Dashboard({
           <FollowList data={follows} db={db} lang={lang} />
         </Panel>
       </section>
+      <Panel title={lang === "es" ? "Acciones de Venta de Hoy" : "Today's Sales Actions"}>
+        {recommendations.length ? <div className="follow-list">{recommendations.map(a=>{const l=db.leads.find(x=>x.id===a.prospectId);return <article key={a.prospectId}><div><b>{l?.firstName} {l?.lastName}</b><span>{a.recommendation} · {money(a.potentialValue)}</span></div><button onClick={()=>nav('/leads/'+a.prospectId)}>{lang==='es'?'Abrir':'Open'}</button></article>})}</div> : <p>{lang==='es'?'Todo está al día.':'You’re all caught up.'}</p>}
+        <button onClick={()=>nav('/actions')}>{lang==='es'?'Ver todas las acciones':'View All Sales Actions'}</button>
+      </Panel>
       <Panel title={t(lang, "activity")}>
         <div className="timeline">
           {db.activities.slice(0, 6).map((a) => (
@@ -343,6 +352,7 @@ function Dashboard({
     </>
   );
 }
+function SalesActions({db,lang}:{db:ReturnType<typeof storage.get>;lang:Language}){const nav=useNavigate(),actions=salesActions(db.leads);const [prospect,setProspect]=useState<Lead>();return <><PageTitle title={lang==='es'?'Centro de Acciones':'Sales Action Center'}/><section className="panel"><div className="sales-actions">{actions.map(a=>{const lead=db.leads.find(l=>l.id===a.prospectId);return <article className="sales-action-card" key={a.prospectId}><span className={`task-badge priority-${a.priority}`}>{a.priority}</span><div><b>{lead?`${lead.firstName} ${lead.lastName}`:''}</b><p>{a.reason}</p><small>{a.recommendation} · {money(a.potentialValue)}</small></div><div className="button-row"><button className="primary" onClick={()=>nav('/leads/'+a.prospectId)}>{lang==='es'?'Abrir prospecto':'Open Prospect'}</button>{lead&&<button onClick={()=>setProspect(lead)}>{lang==='es'?'Preparar mensaje':'Draft Message'}</button>}</div></article>})}{!actions.length&&<p>{lang==='es'?'Todo está al día.':'You’re all caught up.'}</p>}</div></section>{prospect&&<AIMessageAssistant prospect={prospect} open onClose={()=>setProspect(undefined)} lang={lang}/>}</>}
 function PageTitle({
   title,
   children,
@@ -778,7 +788,9 @@ function Detail({
   const nav = useNavigate();
   const lead = db.leads.find((l) => l.id === leadId);
   const [note, setNote] = useState("");
+  const [assistantOpen, setAssistantOpen] = useState(false);
   if (!lead) return <Empty lang={lang} />;
+  const recommendation = salesActions([lead])[0];
   const message = (cat: string) => {
     const x = db.templates.find((q) => q.category === cat);
     if (!x) return "";
@@ -851,6 +863,8 @@ function Detail({
       </section>
       <div className="detail-grid">
         <div>
+          {recommendation && <Panel title={lang==='es'?'Próxima Mejor Acción':'Next Best Action'}><div className="ai-note"><b>{recommendation.priority.toUpperCase()}</b><p>{recommendation.recommendation}</p><small>{recommendation.reason} · {money(recommendation.potentialValue)}</small></div><div className="button-row"><button onClick={()=>nav('/follow-ups')}>{lang==='es'?'Crear seguimiento':'Create Follow-up'}</button><button onClick={()=>nav('/tasks')}>{lang==='es'?'Crear tarea':'Create Task'}</button>{lead.phone&&<button onClick={()=>window.open(`https://wa.me/${(lead.whatsapp||lead.phone).replace(/\D/g,'')}`)}>WhatsApp</button>}{lead.email&&<button onClick={()=>window.open(`mailto:${lead.email}`)}>Email</button>}</div></Panel>}
+          {recommendation && <Panel title={lang==='es'?'Próxima Mejor Acción':'Next Best Action'}><button onClick={()=>setAssistantOpen(true)}>{lang==='es'?'Preparar mensaje':'Draft Message'}</button></Panel>}
           <Panel title={t(lang, "actions")}>
             <div className="action-grid">
               <button
@@ -1051,6 +1065,7 @@ function Detail({
           </Panel>
         </div>
       </div>
+      <AIMessageAssistant prospect={lead} open={assistantOpen} onClose={()=>setAssistantOpen(false)} lang={lang}/>
     </>
   );
 }
