@@ -8,6 +8,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { localEmailProvider } from "./services/communications/emailProvider";
+import { communicationsRepository } from "./services/db/communications";
+import { automationsRepository } from "./services/db/automations";
 import { tasksRepository } from "./services/db/tasks";
 import { useAuth } from "./auth/AuthProvider";
 import type {
@@ -46,17 +48,53 @@ export function Communications({
   lang: Language;
   notify: (s: string) => void;
 }) {
+  const { user, configured } = useAuth();
   const [ops, setOps] = useState(get());
+  const [drafts, setDrafts] = useState<any[]>([]);
+  const [error, setError] = useState("");
   const [leadId, setLeadId] = useState(db.leads[0]?.id || "");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const lead = db.leads.find((x: any) => x.id === leadId);
+  useEffect(() => {
+    if (!configured || !user) return;
+    communicationsRepository
+      .drafts()
+      .then(setDrafts)
+      .catch(() =>
+        setError(
+          tx(
+            lang,
+            "Unable to load drafts",
+            "No se pudieron cargar los borradores",
+          ),
+        ),
+      );
+  }, [configured, user, lang]);
   const save = (x: Ops) => {
     setOps(x);
     put(x);
   };
-  const draft = () => {
+  const draft = async () => {
     if (!lead) return;
+    if (configured && user) {
+      try {
+        const saved = await communicationsRepository.createDraft({
+          prospectId: lead.id,
+          channel: "email",
+          recipient: lead.email,
+          subject,
+          content: body,
+        });
+        setDrafts((x) => [saved, ...x]);
+        notify(tx(lang, "Email draft created", "Borrador de correo creado"));
+      } catch {
+        setError(
+          tx(lang, "Unable to save draft", "No se pudo guardar el borrador"),
+        );
+      }
+      return;
+    }
     const m = localEmailProvider.createDraft({
       prospectId: lead.id,
       channel: "email",
@@ -80,6 +118,7 @@ export function Communications({
       <Title lang={lang} en="Communications" es="Comunicaciones" />
       <div className="detail-grid">
         <section className="panel">
+          {error && <p className="ai-note">{error}</p>}
           <h2>{tx(lang, "Email Composer", "Redactor de Correo")}</h2>
           <p className="ai-note">
             {tx(
@@ -149,7 +188,7 @@ export function Communications({
             {tx(lang, "Drafts & Email History", "Borradores e Historial")}
           </h2>
           <div className="ops-list">
-            {ops.messages.map((m) => (
+            {(configured && user ? drafts : ops.messages).map((m: any) => (
               <article key={m.id}>
                 <div>
                   <b>
@@ -162,17 +201,32 @@ export function Communications({
                 </div>
                 <button
                   onClick={() =>
-                    save({
-                      ...ops,
-                      messages: ops.messages.filter((x) => x.id !== m.id),
-                    })
+                    configured && user
+                      ? communicationsRepository
+                          .removeDraft(m.id)
+                          .then(() =>
+                            setDrafts((x) => x.filter((d) => d.id !== m.id)),
+                          )
+                          .catch(() =>
+                            setError(
+                              tx(
+                                lang,
+                                "Unable to delete draft",
+                                "No se pudo eliminar el borrador",
+                              ),
+                            ),
+                          )
+                      : save({
+                          ...ops,
+                          messages: ops.messages.filter((x) => x.id !== m.id),
+                        })
                   }
                 >
                   <Trash2 size={15} />
                 </button>
               </article>
             ))}
-            {!ops.messages.length && (
+            {!(configured && user ? drafts : ops.messages).length && (
               <p>{tx(lang, "No drafts yet.", "Todavía no hay borradores.")}</p>
             )}
           </div>
@@ -442,12 +496,29 @@ export function Automations({
   lang: Language;
   notify: (s: string) => void;
 }) {
+  const { user, configured } = useAuth();
   const [ops, setOps] = useState(get());
+  const [rules, setRules] = useState<any[]>([]);
   const save = (x: Ops) => {
     setOps(x);
     put(x);
   };
-  const add = () => {
+  useEffect(() => {
+    if (configured && user)
+      automationsRepository
+        .getAll()
+        .then(setRules)
+        .catch(() =>
+          notify(
+            tx(
+              lang,
+              "Unable to load automation rules",
+              "No se pudieron cargar las reglas",
+            ),
+          ),
+        );
+  }, [configured, user, lang]);
+  const add = async () => {
     const r: AutomationRule = {
       id: uid(),
       name: tx(
@@ -461,7 +532,27 @@ export function Automations({
       active: true,
       timesTriggered: 0,
     };
-    save({ ...ops, rules: [r, ...ops.rules] });
+    if (configured && user) {
+      try {
+        const saved = await automationsRepository.create({
+          name: r.name,
+          active: true,
+          triggerType: r.trigger,
+          condition: { description: r.condition },
+          actionType: r.action,
+        });
+        setRules((x) => [saved, ...x]);
+      } catch {
+        notify(
+          tx(
+            lang,
+            "Unable to save automation rule",
+            "No se pudo guardar la regla",
+          ),
+        );
+        return;
+      }
+    } else save({ ...ops, rules: [r, ...ops.rules] });
     notify(
       tx(lang, "Automation rule created", "Regla de automatización creada"),
     );
@@ -487,10 +578,20 @@ export function Automations({
             "Las reglas solo crean tareas, alertas, recomendaciones o borradores. Nunca envían mensajes automáticamente.",
           )}
         </p>
-        <div className="ops-list">
-          {ops.rules.map((r) => (
-            <article key={r.id}>
-              <div>
+        <div className="ops-list automation-list">
+          {(configured && user
+            ? rules.map((r: any) => ({
+                ...r,
+                trigger: r.trigger_type,
+                condition: r.condition?.description || "",
+                action: r.action_type,
+                timesTriggered: r.times_triggered || 0,
+                lastRun: r.last_run_at,
+              }))
+            : ops.rules
+          ).map((r: any) => (
+            <article key={r.id} className="automation-card">
+              <div className="automation-card__content">
                 <b>{r.name}</b>
                 <span>
                   {r.trigger} · {r.condition} → {r.action}
@@ -498,9 +599,11 @@ export function Automations({
                 <small>
                   {tx(lang, "Times triggered: ", "Veces activada: ")}
                   {r.timesTriggered}
+                  {r.lastRun &&
+                    ` · ${tx(lang, "Last run: ", "Última ejecución: ")}${new Date(r.lastRun).toLocaleString()}`}
                 </small>
               </div>
-              <label className="toggle">
+              <div className="automation-card__controls"><label className="toggle">
                 <span>
                   {r.active
                     ? tx(lang, "Active", "Activa")
@@ -510,18 +613,97 @@ export function Automations({
                   type="checkbox"
                   checked={r.active}
                   onChange={(e) =>
-                    save({
-                      ...ops,
-                      rules: ops.rules.map((x) =>
-                        x.id === r.id ? { ...x, active: e.target.checked } : x,
-                      ),
-                    })
+                    configured && user
+                      ? automationsRepository
+                          .update(r.id, { active: e.target.checked })
+                          .then((saved) =>
+                            setRules((all) =>
+                              all.map((x) => (x.id === r.id ? saved : x)),
+                            ),
+                          )
+                          .catch(() =>
+                            notify(
+                              tx(
+                                lang,
+                                "Unable to update automation rule",
+                                "No se pudo actualizar la regla",
+                              ),
+                            ),
+                          )
+                      : save({
+                          ...ops,
+                          rules: ops.rules.map((x) =>
+                            x.id === r.id
+                              ? { ...x, active: e.target.checked }
+                              : x,
+                          ),
+                        })
                   }
                 />
               </label>
+              {configured && user && (
+                <>
+                  <button
+                    onClick={() => {
+                      const name = prompt(
+                        tx(lang, "Rule name", "Nombre de regla"),
+                        r.name,
+                      );
+                      if (name)
+                        automationsRepository
+                          .update(r.id, { name })
+                          .then((saved) =>
+                            setRules((all) =>
+                              all.map((x) => (x.id === r.id ? saved : x)),
+                            ),
+                          )
+                          .catch(() =>
+                            notify(
+                              tx(
+                                lang,
+                                "Unable to update automation rule",
+                                "No se pudo actualizar la regla",
+                              ),
+                            ),
+                          );
+                    }}
+                  >
+                    {tx(lang, "Edit", "Editar")}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (
+                        confirm(
+                          tx(
+                            lang,
+                            "Delete this rule?",
+                            "¿Eliminar esta regla?",
+                          ),
+                        )
+                      )
+                        automationsRepository
+                          .remove(r.id)
+                          .then(() =>
+                            setRules((all) => all.filter((x) => x.id !== r.id)),
+                          )
+                          .catch(() =>
+                            notify(
+                              tx(
+                                lang,
+                                "Unable to delete automation rule",
+                                "No se pudo eliminar la regla",
+                              ),
+                            ),
+                          );
+                    }}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </>
+              )}</div>
             </article>
           ))}
-          {!ops.rules.length && (
+          {!(configured && user ? rules : ops.rules).length && (
             <p>
               {tx(
                 lang,
