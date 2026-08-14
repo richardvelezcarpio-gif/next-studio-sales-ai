@@ -59,6 +59,8 @@ export function CreativeStudio({ lang }: { leads: Lead[]; lang: Language }) {
   const [campaignProgress, setCampaignProgress] = useState("");
   const [campaignIds, setCampaignIds] = useState<string[]>([]);
   const [regeneratingId, setRegeneratingId] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [error, setError] = useState("");
   const update = (patch: Partial<CreativeGenerationRequest>) => setRequest((current) => ({ ...current, ...patch }));
 
@@ -68,6 +70,7 @@ export function CreativeStudio({ lang }: { leads: Lead[]; lang: Language }) {
       const [kits, items] = await Promise.all([brandKitsRepository.getAll(), creativeAssetsRepository.getAll()]);
       const kit = kits[0] || await brandKitsRepository.create(defaultBrand);
       setBrand(kit); setAssets(items);
+      if (kit.logoPath) setLogoUrl(await creativeStorage.signedUrl(kit.logoPath)); else setLogoUrl("");
       const signed = await Promise.all(items.map(async (asset) => [asset.id, await creativeStorage.signedUrl(asset.storagePath)] as const));
       setUrls(Object.fromEntries(signed));
     } catch { setError(text(lang, "Cloud storage is not configured.", "El almacenamiento cloud no está configurado.")); }
@@ -124,6 +127,19 @@ export function CreativeStudio({ lang }: { leads: Lead[]; lang: Language }) {
   };
   const download = (asset: CreativeAsset) => { const anchor = document.createElement("a"); anchor.href = urls[asset.id] || ""; anchor.download = `next-studio-${asset.creativeType}-${asset.createdAt.slice(0, 10)}.png`; anchor.click(); };
   const saveBrand = async () => { try { setBrand(brand.id ? await brandKitsRepository.update(brand.id, brand) : await brandKitsRepository.create(brand)); } catch { setError(text(lang, "Unable to save Brand Kit.", "No se pudo guardar el Kit de Marca.")); } };
+  const uploadLogo = async (file?: File) => {
+    if (!file || uploadingLogo) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) { setError(text(lang, "Use a PNG, JPEG, or WEBP logo up to 5 MB.", "Usa un logo PNG, JPEG o WEBP de hasta 5 MB.")); return; }
+    setUploadingLogo(true); setError("");
+    try { const path = await creativeStorage.uploadLogo(file); const saved = await brandKitsRepository.update(brand.id, { logoPath: path }); setBrand(saved); setLogoUrl(await creativeStorage.signedUrl(path)); }
+    catch { setError(text(lang, "Unable to upload the logo.", "No se pudo subir el logo.")); }
+    finally { setUploadingLogo(false); }
+  };
+  const removeLogo = async () => {
+    if (!brand.logoPath || !confirm(text(lang, "Remove this logo?", "¿Eliminar este logo?"))) return;
+    try { await creativeStorage.remove(brand.logoPath); const saved = await brandKitsRepository.update(brand.id, { logoPath: null }); setBrand(saved); setLogoUrl(""); }
+    catch { setError(text(lang, "Unable to remove the logo.", "No se pudo eliminar el logo.")); }
+  };
   const help = async () => { const fallback = { hook: request.service ? `${request.service} for your next step` : "Build your digital momentum", supporting: "A clear, premium solution for your business.", cta: request.cta || "Get Started", visual: "Clean premium SaaS visual with generous negative space" }; const result: any = await requestOpenAI("creative_copy", { service: request.service, goal: request.goal, audience: request.audience, language: lang, style: request.style }); const copy = result.result || fallback; update({ hook: copy.hook || fallback.hook, offer: copy.supporting || copy.supportingText || fallback.supporting, cta: copy.cta || fallback.cta, visualDirection: copy.visual || copy.visualDirection || fallback.visual }); };
   const caption = async (asset: CreativeAsset) => { const fallback = `${asset.headline || brand.name}\n${asset.cta || "Get Started"}`; const result: any = await requestOpenAI("creative_caption", { headline: asset.headline, supportingText: asset.supportingText, cta: asset.cta, language: lang }); const copy = result.result || {}; const saved = await creativeAssetsRepository.update(asset.id, { caption: copy.caption || fallback, hashtags: copy.hashtags || "#NextStudio #Business #Digital" }); setAssets((current) => current.map((item) => item.id === saved.id ? saved : item)); };
 
@@ -145,7 +161,7 @@ export function CreativeStudio({ lang }: { leads: Lead[]; lang: Language }) {
       <button disabled={busy} onClick={generateCampaignPack}>{busy && campaignProgress ? `${text(lang, "Generating Campaign Pack...", "Generando Paquete de Campaña...")} ${campaignProgress}` : text(lang, "Generate Campaign Pack", "Generar Paquete de Campaña")}</button>
     </section><section className={`creative-preview ${request.format}`}>{preview && <img src={preview} />}<div className="creative-overlay"><b>{request.hook || brand.name}</b><span>{request.offer}</span><em>{request.cta || brand.defaultCta}</em></div></section></div>}
     {tab === "generated" && <section className="creative-history">{assets.length ? assets.map((asset) => <article className={`creative-card ${campaignIds.includes(asset.id) ? "campaign-asset" : ""}`} key={asset.id}>{urls[asset.id] && <img src={urls[asset.id]} />}<b>{asset.creativeType.replace(/_/g, " ")}</b><small>{asset.format} · {new Date(asset.createdAt).toLocaleDateString()} · {asset.provider}</small><div><button onClick={() => download(asset)}><Download size={15} /></button><button disabled={Boolean(regeneratingId)} onClick={() => regenerate(asset)}>{regeneratingId === asset.id ? text(lang, "Regenerating...", "Regenerando...") : text(lang, "Regenerate", "Regenerar")}</button><button onClick={() => { update({ format: asset.format, hook: asset.headline || "", offer: asset.supportingText || "", cta: asset.cta || "" }); setTab("create"); }}>{text(lang, "Variation", "Variación")}</button><button onClick={() => caption(asset)}>{text(lang, "Caption", "Caption")}</button><button onClick={() => navigator.clipboard.writeText(asset.caption || "")}><Copy size={15} /></button><button className="danger" onClick={() => remove(asset)}><Trash2 size={15} /></button></div></article>) : <p>{text(lang, "Create your first AI-powered marketing creative.", "Crea tu primer creativo de marketing con IA.")}</p>}</section>}
-    {tab === "brand" && <section className="panel"><h2>{text(lang, "Brand Kit", "Kit de Marca")}</h2><div className="form-grid">{(["name", "primaryColor", "secondaryColor", "accentColor", "backgroundColor", "website", "defaultCta", "visualStyle", "notes"] as const).map((key) => <label key={key}>{key}<input value={brand[key] || ""} onChange={(event) => setBrand((current) => ({ ...current, [key]: event.target.value }))} /></label>)}</div><button className="primary" onClick={saveBrand}>{text(lang, "Save", "Guardar")}</button></section>}
+    {tab === "brand" && <section className="panel"><h2>{text(lang, "Brand Kit", "Kit de Marca")}</h2><section className="brand-logo"><b>{text(lang, "Logo", "Logo")}</b>{logoUrl ? <img src={logoUrl} alt={brand.name} /> : <span>{text(lang, "No logo uploaded", "No hay logo cargado")}</span>}<div><label className="button-like">{uploadingLogo ? text(lang, "Uploading...", "Subiendo...") : text(lang, brand.logoPath ? "Replace Logo" : "Upload Logo", brand.logoPath ? "Reemplazar Logo" : "Subir Logo")}<input type="file" accept="image/png,image/jpeg,image/webp" disabled={uploadingLogo} onChange={(event) => uploadLogo(event.target.files?.[0])} /></label>{brand.logoPath && <button className="danger" disabled={uploadingLogo} onClick={removeLogo}>{text(lang, "Remove Logo", "Eliminar Logo")}</button>}</div></section><div className="form-grid">{(["name", "primaryColor", "secondaryColor", "accentColor", "backgroundColor", "website", "defaultCta", "visualStyle", "notes"] as const).map((key) => <label key={key}>{key}<input value={brand[key] || ""} onChange={(event) => setBrand((current) => ({ ...current, [key]: event.target.value }))} /></label>)}</div><button className="primary" onClick={saveBrand}>{text(lang, "Save", "Guardar")}</button></section>}
     {tab === "templates" && <section className="template-grid">{templates.map((template) => <article className="template" key={template}><span>{template}</span><h3>{text(lang, "Adaptable social layout", "Diseño social adaptable")}</h3><button onClick={() => { update({ template }); setTab("create"); }}>{text(lang, "Use template", "Usar plantilla")}</button></article>)}</section>}
   </>;
 }
