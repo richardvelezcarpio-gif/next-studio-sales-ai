@@ -82,8 +82,16 @@ export function CreativeStudio({ leads, lang }: { leads: Lead[]; lang: Language 
   const [services, setServices] = useState<CloudService[]>([]);
   const [error, setError] = useState("");
   const [lastDirection, setLastDirection] = useState<CreativeDirection | null>(null);
+  const [creativeDirectionText, setCreativeDirectionText] = useState("");
   const update = (patch: Partial<CreativeGenerationRequest>) => setRequest((current) => ({ ...current, ...patch }));
   const selectedBrand = brandStyle === "none" ? null : brandStyle === "next_studio" ? defaultBrand : brand;
+  const enhanceDirection = (target: CreativeGenerationRequest = request) => {
+    const direction = createCreativeDirection(target, selectedBrand);
+    setLastDirection(direction);
+    setCreativeDirectionText(direction.finalImagePrompt);
+    if (import.meta.env.DEV) console.debug("Creative Director", { originalUserPrompt: target.visualDirection || "", creativeDirectorOutput: direction, finalImagePrompt: direction.finalImagePrompt });
+    return direction;
+  };
 
   const load = useCallback(async () => {
     if (!configured || !user) return;
@@ -99,9 +107,8 @@ export function CreativeStudio({ leads, lang }: { leads: Lead[]; lang: Language 
   useEffect(() => { load(); }, [load]);
 
   const generateOne = async (target: CreativeGenerationRequest, source?: CreativeAsset) => {
-    const direction = createCreativeDirection(target, selectedBrand);
-    setLastDirection(direction);
-    const targetPrompt = direction.finalImagePrompt;
+    const direction = enhanceDirection(target);
+    const targetPrompt = target.mode === "marketing" && creativeDirectionText.trim() ? creativeDirectionText.trim() : direction.finalImagePrompt;
     const generated = await generateCreativeImage(targetPrompt, target);
     const blob = await compose(generated.image, target, selectedBrand, brandStyle === "brand_kit" ? logoUrl : undefined);
     const storagePath = await creativeStorage.upload(crypto.randomUUID(), blob);
@@ -186,7 +193,8 @@ export function CreativeStudio({ leads, lang }: { leads: Lead[]; lang: Language 
       <label>{text(lang, "Offer / supporting text", "Oferta / texto")}<input maxLength={110} value={request.offer || ""} onChange={(event) => update({ offer: event.target.value })} /></label>
       <label>{text(lang, "CTA (Optional)", "CTA (Opcional)")}<input placeholder={text(lang, "Example: Get Yours — leave blank for no CTA", "Ejemplo: Obtén la tuya — déjalo vacío para no mostrar CTA")} value={request.cta || ""} onChange={(event) => update({ cta: event.target.value })} /></label>
       <label>{text(lang, "Visual direction", "Dirección visual")}<textarea value={request.visualDirection || ""} onChange={(event) => update({ visualDirection: event.target.value })} /></label>
-      {lastDirection && <details className="creative-direction"><summary>{text(lang, "View Creative Direction", "Ver Dirección Creativa")}</summary><p><b>{text(lang, "Subject", "Sujeto")}:</b> {lastDirection.subject}</p><p><b>{text(lang, "Composition", "Composición")}:</b> {lastDirection.composition}</p><p><b>{text(lang, "Lighting", "Iluminación")}:</b> {lastDirection.lighting}</p></details>}
+      <button type="button" onClick={() => enhanceDirection()}>{text(lang, "Enhance with AI", "Mejorar con IA")}</button>
+      {lastDirection && <details className="creative-direction" open><summary>{text(lang, "AI Creative Direction", "Dirección Creativa IA")}</summary><p><b>{text(lang, "Subject", "Sujeto")}:</b> {lastDirection.subject}</p><p><b>{text(lang, "Composition", "Composición")}:</b> {lastDirection.composition}</p><p><b>{text(lang, "Lighting", "Iluminación")}:</b> {lastDirection.lighting}</p><label>{text(lang, "Final image direction", "Dirección final de imagen")}<textarea value={creativeDirectionText} onChange={(event) => setCreativeDirectionText(event.target.value)} /></label></details>}
       <button className="primary" disabled={busy} onClick={generate}>{busy ? text(lang, "Generating your creative...", "Generando tu creativo...") : text(lang, "Generate Image", "Generar Imagen")}</button>
       <button onClick={help}>{text(lang, "Help Me Create", "Ayúdame a Crear")}</button>
       <button disabled={busy} onClick={generateCampaignPack}>{busy && campaignProgress ? `${text(lang, "Generating Campaign Pack...", "Generando Paquete de Campaña...")} ${campaignProgress}` : text(lang, "Generate Campaign Pack", "Generar Paquete de Campaña")}</button>
