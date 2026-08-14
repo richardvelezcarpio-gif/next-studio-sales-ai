@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 const allowedSizes = new Set(["1024x1024", "1024x1536", "1536x1024"]);
 const allowedFormats = new Set(["square", "portrait", "story", "landscape"]);
 const allowedTypes = new Set(["social_post", "promotion", "service", "facebook_ad", "instagram_post", "story", "reel_cover", "announcement", "lead_generation", "event", "quote", "custom"]);
-const allowedStyles = new Set(["premium", "clean", "modern", "technology", "elegant", "corporate", "bold", "minimal", "luxury", "energetic", "friendly"]);
+const allowedStyles = new Set(["auto", "natural", "realistic", "clean", "professional", "premium", "cinematic", "minimal", "vibrant", "custom", "modern", "technology", "elegant", "corporate", "bold", "luxury", "energetic", "friendly"]);
 const allowedModes = new Set(["visual", "marketing"]);
 const safeError = (res: any, status: number, error: string) => res.status(status).json({ success: false, error });
 
