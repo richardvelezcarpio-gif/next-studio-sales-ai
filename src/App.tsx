@@ -44,7 +44,9 @@ import { useAuth } from "./auth/AuthProvider";
 import { AIMessageAssistant } from "./components/AIMessageAssistant";
 import { QuickFollowUp, QuickTask } from "./components/QuickActions";
 import { ActivityTimeline } from "./components/ActivityTimeline";
+import { MarkLostModal, MarkWonModal } from "./components/DealClosingModals";
 import { salesActions } from "./services/sales/nextBestAction";
+import { closeProbability } from "./services/sales/closeProbability";
 const id = () => crypto.randomUUID();
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (n = 0) =>
@@ -98,6 +100,15 @@ function App() {
       setToast("Unable to save prospect");
     }
   };
+  const persistProspectStrict = async (lead: Lead) => {
+    const saved = await prospectsRepository.update(lead.id, lead);
+    setDb((current) => {
+      const next = { ...current, leads: current.leads.map((item) => item.id === saved.id ? saved : item) };
+      storage.save({ ...next, leads: configured ? [] : next.leads });
+      return next;
+    });
+    return saved;
+  };
   const notify = (x: string) => {
     setToast(x);
     setTimeout(() => setToast(""), 2400);
@@ -124,12 +135,12 @@ function App() {
           />
           <Route
             path="/leads/:id"
-            element={<Detail db={db} save={save} lang={lang} notify={notify} />}
+            element={<Detail db={db} save={save} persistProspectStrict={persistProspectStrict} lang={lang} notify={notify} />}
           />
           <Route
             path="/pipeline"
             element={
-              <Pipeline db={db} save={save} lang={lang} notify={notify} />
+              <Pipeline db={db} save={save} persistProspectStrict={persistProspectStrict} lang={lang} notify={notify} />
             }
           />
           <Route
@@ -690,17 +701,21 @@ function Badge({ lang, stage }: { lang: Language; stage: Stage }) {
 function Pipeline({
   db,
   save,
+  persistProspectStrict,
   lang,
   notify,
 }: {
   db: ReturnType<typeof storage.get>;
   save: any;
+  persistProspectStrict: (lead: Lead) => Promise<Lead>;
   lang: Language;
   notify: (x: string) => void;
 }) {
   const nav = useNavigate();
+  const [closing,setClosing]=useState<{lead:Lead;stage:'won'|'lost'}|null>(null);
   const move = (lead: Lead, stage: Stage) => {
     if (lead.stage === stage) return;
+    if(stage==='won'||stage==='lost'){setClosing({lead,stage});return}
     save({
       ...db,
       leads: db.leads.map((l) => (l.id === lead.id ? { ...l, stage } : l)),
@@ -772,17 +787,39 @@ function Pipeline({
           </section>
         ))}
       </div>
+      {closing?.stage === "won" && (
+        <MarkWonModal
+          lead={closing.lead}
+          lang={lang}
+          onCancel={() => setClosing(null)}
+          onConfirm={async (patch) => {
+            await persistProspectStrict({ ...closing.lead, ...patch });
+          }}
+        />
+      )}
+      {closing?.stage === "lost" && (
+        <MarkLostModal
+          lead={closing.lead}
+          lang={lang}
+          onCancel={() => setClosing(null)}
+          onConfirm={async (patch) => {
+            await persistProspectStrict({ ...closing.lead, ...patch });
+          }}
+        />
+      )}
     </>
   );
 }
 function Detail({
   db,
   save,
+  persistProspectStrict,
   lang,
   notify,
 }: {
   db: ReturnType<typeof storage.get>;
   save: any;
+  persistProspectStrict: (lead: Lead) => Promise<Lead>;
   lang: Language;
   notify: (x: string) => void;
 }) {
@@ -793,10 +830,12 @@ function Detail({
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [quickTaskOpen, setQuickTaskOpen] = useState(false);
   const [quickFollowOpen, setQuickFollowOpen] = useState(false);
+  const [closeModal,setCloseModal]=useState<'won'|'lost'|null>(null);
   const [activityRefreshKey,setActivityRefreshKey]=useState(0);
   const handleActivityChanged=()=>setActivityRefreshKey(x=>x+1);
   if (!lead) return <Empty lang={lang} />;
   const recommendation = salesActions([lead])[0];
+  const closing=closeProbability(lead); const displayedProbability=lead.probability??closing.probability;
   const message = (cat: string) => {
     const x = db.templates.find((q) => q.category === cat);
     if (!x) return "";
@@ -852,6 +891,7 @@ function Detail({
       </PageTitle>
       <section className="lead-head">
         <div>
+          <Panel title={lang==='es'?'Inteligencia de Cierre':'Closing Intelligence'}><div className="facts"><span>{lang==='es'?'Valor potencial':'Potential Value'}<b>{money(lead.potentialValue)}</b></span><span>{lang==='es'?'Probabilidad estimada':'Estimated Close Probability'}<b>{displayedProbability}% · {closing.confidence}</b></span><span>{lang==='es'?'Etapa actual':'Current Stage'}<b>{label(lang,'stage',lead.stage)}</b></span><span>{lang==='es'?'Próximo paso':'Next Step'}<b>{lead.nextStep||recommendation?.recommendation||'—'}</b></span></div>{closing.risks.length>0&&<p className="ai-note">{lang==='es'?'En Riesgo: ':'At Risk: '}{closing.risks.join(' · ')}</p>}<p>{lang==='es'?'Acción recomendada: ':'Recommended Closing Action: '}{recommendation?.recommendation||closing.recommendation}</p></Panel>
           <span>{lead.business}</span>
           <h1>{money(lead.potentialValue)}</h1>
         </div>
@@ -871,6 +911,7 @@ function Detail({
         <div>
           {recommendation && <Panel title={lang==='es'?'Próxima Mejor Acción':'Next Best Action'}><div className="ai-note"><b>{recommendation.priority.toUpperCase()}</b><p>{recommendation.recommendation}</p><small>{recommendation.reason} · {money(recommendation.potentialValue)}</small></div><div className="button-row"><button onClick={()=>setQuickFollowOpen(true)}>{lang==='es'?'Crear seguimiento':'Create Follow-up'}</button><button onClick={()=>setQuickTaskOpen(true)}>{lang==='es'?'Crear tarea':'Create Task'}</button>{lead.phone&&<button onClick={()=>window.open(`https://wa.me/${(lead.whatsapp||lead.phone).replace(/\D/g,'')}`)}>WhatsApp</button>}{lead.email&&<button onClick={()=>window.open(`mailto:${lead.email}`)}>Email</button>}</div></Panel>}
           {recommendation && <Panel title={lang==='es'?'Próxima Mejor Acción':'Next Best Action'}><button onClick={()=>setAssistantOpen(true)}>{lang==='es'?'Preparar mensaje':'Draft Message'}</button></Panel>}
+          <div className="button-row"><button className="primary" onClick={()=>setCloseModal('won')}>{lang==='es'?'Marcar Ganado':'Mark Won'}</button><button onClick={()=>setCloseModal('lost')}>{lang==='es'?'Marcar Perdido':'Mark Lost'}</button></div>
           <Panel title={t(lang, "actions")}>
             <div className="action-grid">
               <button
@@ -1076,6 +1117,28 @@ function Detail({
       </div>
       <AIMessageAssistant prospect={lead} open={assistantOpen} onClose={()=>setAssistantOpen(false)} onSaved={handleActivityChanged} lang={lang}/>
       {quickTaskOpen&&<QuickTask prospect={lead} lang={lang} onSuccess={handleActivityChanged} onClose={()=>setQuickTaskOpen(false)}/>} {quickFollowOpen&&<QuickFollowUp prospect={lead} lang={lang} onSuccess={handleActivityChanged} onClose={()=>setQuickFollowOpen(false)}/>}
+      {closeModal === "won" && (
+        <MarkWonModal
+          lead={lead}
+          lang={lang}
+          onCancel={() => setCloseModal(null)}
+          onConfirm={async (patch) => {
+            await persistProspectStrict({ ...lead, ...patch });
+            handleActivityChanged();
+          }}
+        />
+      )}
+      {closeModal === "lost" && (
+        <MarkLostModal
+          lead={lead}
+          lang={lang}
+          onCancel={() => setCloseModal(null)}
+          onConfirm={async (patch) => {
+            await persistProspectStrict({ ...lead, ...patch });
+            handleActivityChanged();
+          }}
+        />
+      )}
     </>
   );
 }
