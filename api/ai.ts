@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 
 const model = process.env.OPENAI_MODEL || 'gpt-5-mini';
 const json = (statusCode:number, body:unknown) => ({ statusCode, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
-const prompt = (operation:string, context:Record<string,unknown>) => `You are a careful sales assistant for Next Studio. Operation: ${operation}. Use only this prospect context: ${JSON.stringify(context)}. Respect the prospect language. Never invent prices, discounts, dates, guarantees, testimonials, results, features, or payment terms. If unknown, say it needs confirmation. Return concise valid JSON only.`;
+const prompt = (operation:string, context:Record<string,unknown>) => `You are a careful sales assistant for Next Studio. Operation: ${operation}. Use only this prospect context: ${JSON.stringify(context)}. Respect the prospect language. Never invent prices, discounts, dates, agreements, guarantees, testimonials, results, features, or payment terms. Do not promise outcomes. If unknown, say it needs confirmation.${operation==='closing_coach'?' Return exactly this concise JSON shape: {"happening":"","mainRisk":"","approach":"","nextStep":"","messageAngle":""}. Recommend only actions supported by supplied facts.':''} Return concise valid JSON only.`;
 
 export default async function handler(req:any, res:any) {
   if (req.method !== 'POST') return res.status(405).json({error:'Method not allowed'});
