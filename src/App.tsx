@@ -43,6 +43,7 @@ import {
 import { useAuth } from "./auth/AuthProvider";
 import { AIMessageAssistant } from "./components/AIMessageAssistant";
 import { QuickFollowUp, QuickTask } from "./components/QuickActions";
+import { ActivityTimeline } from "./components/ActivityTimeline";
 import { salesActions } from "./services/sales/nextBestAction";
 const id = () => crypto.randomUUID();
 const today = () => new Date().toISOString().slice(0, 10);
@@ -792,6 +793,8 @@ function Detail({
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [quickTaskOpen, setQuickTaskOpen] = useState(false);
   const [quickFollowOpen, setQuickFollowOpen] = useState(false);
+  const [activityRefreshKey,setActivityRefreshKey]=useState(0);
+  const handleActivityChanged=()=>setActivityRefreshKey(x=>x+1);
   if (!lead) return <Empty lang={lang} />;
   const recommendation = salesActions([lead])[0];
   const message = (cat: string) => {
@@ -1051,6 +1054,9 @@ function Detail({
                 </div>
               ))}
           </Panel>
+          <Panel title={lang === "es" ? "Historial de Actividad" : "Activity Timeline"}>
+            <ActivityTimeline prospect={lead} lang={lang} refreshKey={activityRefreshKey} />
+          </Panel>
           <Panel title={t(lang, "activity")}>
             <div className="timeline">
               {db.activities
@@ -1068,8 +1074,8 @@ function Detail({
           </Panel>
         </div>
       </div>
-      <AIMessageAssistant prospect={lead} open={assistantOpen} onClose={()=>setAssistantOpen(false)} lang={lang}/>
-      {quickTaskOpen&&<QuickTask prospect={lead} lang={lang} onClose={()=>setQuickTaskOpen(false)}/>} {quickFollowOpen&&<QuickFollowUp prospect={lead} lang={lang} onClose={()=>setQuickFollowOpen(false)}/>}
+      <AIMessageAssistant prospect={lead} open={assistantOpen} onClose={()=>setAssistantOpen(false)} onSaved={handleActivityChanged} lang={lang}/>
+      {quickTaskOpen&&<QuickTask prospect={lead} lang={lang} onSuccess={handleActivityChanged} onClose={()=>setQuickTaskOpen(false)}/>} {quickFollowOpen&&<QuickFollowUp prospect={lead} lang={lang} onSuccess={handleActivityChanged} onClose={()=>setQuickFollowOpen(false)}/>}
     </>
   );
 }
