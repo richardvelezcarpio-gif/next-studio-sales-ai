@@ -8,6 +8,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { localEmailProvider } from "./services/communications/emailProvider";
+import { communicationsRepository } from "./services/db/communications";
 import { tasksRepository } from "./services/db/tasks";
 import { useAuth } from "./auth/AuthProvider";
 import type {
@@ -46,17 +47,32 @@ export function Communications({
   lang: Language;
   notify: (s: string) => void;
 }) {
+  const { user, configured } = useAuth();
   const [ops, setOps] = useState(get());
+  const [drafts, setDrafts] = useState<any[]>([]);
+  const [error, setError] = useState("");
   const [leadId, setLeadId] = useState(db.leads[0]?.id || "");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const lead = db.leads.find((x: any) => x.id === leadId);
+  useEffect(() => {
+    if (!configured || !user) return;
+    communicationsRepository.drafts().then(setDrafts).catch(() => setError(tx(lang, "Unable to load drafts", "No se pudieron cargar los borradores")));
+  }, [configured, user, lang]);
   const save = (x: Ops) => {
     setOps(x);
     put(x);
   };
-  const draft = () => {
+  const draft = async () => {
     if (!lead) return;
+    if (configured && user) {
+      try {
+        const saved = await communicationsRepository.createDraft({ prospectId: lead.id, channel: "email", recipient: lead.email, subject, content: body });
+        setDrafts((x) => [saved, ...x]);
+        notify(tx(lang, "Email draft created", "Borrador de correo creado"));
+      } catch { setError(tx(lang, "Unable to save draft", "No se pudo guardar el borrador")); }
+      return;
+    }
     const m = localEmailProvider.createDraft({
       prospectId: lead.id,
       channel: "email",
@@ -80,6 +96,7 @@ export function Communications({
       <Title lang={lang} en="Communications" es="Comunicaciones" />
       <div className="detail-grid">
         <section className="panel">
+          {error && <p className="ai-note">{error}</p>}
           <h2>{tx(lang, "Email Composer", "Redactor de Correo")}</h2>
           <p className="ai-note">
             {tx(
@@ -149,7 +166,7 @@ export function Communications({
             {tx(lang, "Drafts & Email History", "Borradores e Historial")}
           </h2>
           <div className="ops-list">
-            {ops.messages.map((m) => (
+            {(configured && user ? drafts : ops.messages).map((m: any) => (
               <article key={m.id}>
                 <div>
                   <b>
@@ -162,17 +179,16 @@ export function Communications({
                 </div>
                 <button
                   onClick={() =>
-                    save({
-                      ...ops,
-                      messages: ops.messages.filter((x) => x.id !== m.id),
-                    })
+                    configured && user
+                      ? communicationsRepository.removeDraft(m.id).then(() => setDrafts((x) => x.filter((d) => d.id !== m.id))).catch(() => setError(tx(lang, "Unable to delete draft", "No se pudo eliminar el borrador")))
+                      : save({ ...ops, messages: ops.messages.filter((x) => x.id !== m.id) })
                   }
                 >
                   <Trash2 size={15} />
                 </button>
               </article>
             ))}
-            {!ops.messages.length && (
+            {!(configured && user ? drafts : ops.messages).length && (
               <p>{tx(lang, "No drafts yet.", "Todavía no hay borradores.")}</p>
             )}
           </div>
