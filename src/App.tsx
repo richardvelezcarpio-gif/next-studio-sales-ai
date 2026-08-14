@@ -50,6 +50,7 @@ import { closeProbability } from "./services/sales/closeProbability";
 import { DashboardForecast, ForecastPage } from "./components/RevenueForecast";
 import { ClosingCoach } from "./components/ClosingCoach";
 import { DealInsightsPanel } from "./components/DealInsights";
+import { CreativeStudio } from "./components/creative/CreativeStudio";
 const id = () => crypto.randomUUID();
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (n = 0) =>
@@ -133,6 +134,7 @@ function App() {
           />
           <Route path="/actions" element={<SalesActions db={db} lang={lang} />} />
           <Route path="/forecast" element={<ForecastPage leads={db.leads} lang={lang} />} />
+          <Route path="/creative" element={<CreativeStudio leads={db.leads} lang={lang} />} />
           <Route
             path="/leads"
             element={<Leads db={db} save={save} lang={lang} notify={notify} />}
@@ -215,6 +217,7 @@ function Shell({
     ["/communications", "Communications", Mail],
     ["/messages", "messages", MessageSquare],
     ["/playbook", "playbook", Copy],
+    ["/creative", "Creative Studio", BarChart3],
     ["/automations", "Automations", Clock3],
     ["/insights", "insights", BarChart3],
     ["/ai", "AI Center", BarChart3],
@@ -236,7 +239,7 @@ function Shell({
           {nav.map(([to, key, Icon]) => (
             <NavLink key={to} to={to} onClick={() => setMobile(false)}>
               <Icon size={19} />
-              {["AI Center", "Tasks", "Communications", "Automations", "Forecast"].includes(
+              {["AI Center", "Tasks", "Communications", "Automations", "Forecast", "Creative Studio"].includes(
                 key,
               )
                 ? key
@@ -354,6 +357,7 @@ function Dashboard({
         <button onClick={()=>nav('/actions')}>{lang==='es'?'Ver todas las acciones':'View All Sales Actions'}</button>
       </Panel>
       <DashboardForecast leads={db.leads} lang={lang} />
+      <Panel title={lang === "es" ? "Marketing" : "Marketing"}><button className="primary" onClick={() => nav("/creative")}>{lang === "es" ? "Crear Creativo" : "Create Marketing Creative"}</button></Panel>
       <Panel title={t(lang, "activity")}>
         <div className="timeline">
           {db.activities.slice(0, 6).map((a) => (

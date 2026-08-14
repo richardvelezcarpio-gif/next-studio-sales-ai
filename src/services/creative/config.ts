@@ -1,0 +1,1 @@
+export const CREATIVE_CONFIG = { provider: "openai", model: "gpt-image-1", quality: "medium", timeoutMs: 60000, supportedFormats: ["square", "portrait", "story", "landscape"] as const, bucket: "creative-assets" } as const;
