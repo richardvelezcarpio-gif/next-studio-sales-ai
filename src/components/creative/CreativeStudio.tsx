@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Download, Trash2 } from "lucide-react";
 import { useAuth } from "../../auth/AuthProvider";
 import type { Language, Lead } from "../../types";
-import { buildCreativePrompt } from "../../services/creative/promptBuilder";
+import { buildCreativePrompt, resolveCreativeCta } from "../../services/creative/promptBuilder";
 import { formatSpecs, type BrandKit, type CreativeAsset, type CreativeGenerationRequest } from "../../services/creative/creativeTypes";
 import { generateCreativeImage } from "../../services/creative/creativeClient";
 import { brandKitsRepository } from "../../services/db/brandKits";
@@ -13,7 +13,7 @@ import { servicesRepository, type CloudService } from "../../services/db/service
 
 const text = (lang: Language, en: string, es: string) => lang === "es" ? es : en;
 const defaultBrand: BrandKit = { id: "", name: "Next Studio", primaryColor: "#0874d1", secondaryColor: "#0f2a54", accentColor: "#48b6e8", backgroundColor: "#ffffff", website: "", defaultCta: "Get Started", visualStyle: "Premium", notes: "" };
-const defaultRequest: CreativeGenerationRequest = { creativeType: "social_post", format: "square", brand: "Next Studio", goal: "leads", language: "en", style: "premium", mode: "marketing", template: "Next Studio Premium", cta: "Get Started" };
+const defaultRequest: CreativeGenerationRequest = { creativeType: "social_post", format: "square", brand: "Next Studio", goal: "leads", language: "en", style: "premium", mode: "marketing", template: "Next Studio Premium", cta: "" };
 const creativeTypes = ["social_post", "promotion", "service", "facebook_ad", "instagram_post", "story", "reel_cover", "announcement", "lead_generation", "event", "quote", "custom"] as const;
 const styles = ["premium", "clean", "modern", "technology", "elegant", "corporate", "bold", "minimal", "luxury", "energetic", "friendly"] as const;
 const templates = ["Next Studio Premium", "Clean SaaS", "Bold Promotion", "Minimal Business", "Technology Launch"];
@@ -33,17 +33,25 @@ async function compose(imageUrl: string, request: CreativeGenerationRequest, bra
   const height = source.height * scale;
   context.drawImage(source, (spec.width - width) / 2, (spec.height - height) / 2, width, height);
   if (request.mode === "marketing") {
+    const template = request.template;
+    const isBold = template === "Bold Promotion";
+    const isMinimal = template === "Minimal Business";
+    const isTechnology = template === "Technology Launch";
+    const copyX = template === "Clean SaaS" || isTechnology ? spec.width * .1 : spec.width * .07;
+    const headlineY = isMinimal ? spec.height * .3 : isTechnology ? spec.height * .22 : spec.height * .25;
+    const ctaY = isMinimal ? spec.height * .78 : spec.height * .82;
+    const cta = resolveCreativeCta(request, brand);
     const overlay = context.createLinearGradient(0, 0, 0, spec.height);
-    overlay.addColorStop(0, "#071a35bd"); overlay.addColorStop(.55, "#071a3520"); overlay.addColorStop(1, "#071a35dc");
+    overlay.addColorStop(0, isMinimal ? "#071a3575" : "#071a35cf"); overlay.addColorStop(.52, "#071a3518"); overlay.addColorStop(1, isBold ? "#071a35f0" : "#071a35d6");
     context.fillStyle = overlay; context.fillRect(0, 0, spec.width, spec.height);
-    context.fillStyle = brand.primaryColor; context.fillRect(spec.width * .07, spec.height * .08, spec.width * .12, 8);
+    context.fillStyle = isBold ? brand.accentColor : brand.primaryColor; context.fillRect(copyX, spec.height * .08, spec.width * (isTechnology ? .17 : .12), 8);
     context.fillStyle = "#fff"; context.font = `700 ${Math.round(spec.width * .075)}px sans-serif`;
-    context.fillText((request.hook || brand.name).slice(0, 55), spec.width * .07, spec.height * .25, spec.width * .84);
+    context.fillText((request.hook || brand.name).slice(0, 55), copyX, headlineY, spec.width * .82);
     context.font = `500 ${Math.round(spec.width * .034)}px sans-serif`;
-    context.fillText((request.offer || "").slice(0, 85), spec.width * .07, spec.height * .34, spec.width * .82);
-    context.fillStyle = brand.accentColor; context.fillRect(spec.width * .07, spec.height * .82, spec.width * .38, spec.height * .075);
+    context.fillText((request.offer || "").slice(0, 85), copyX, headlineY + spec.height * .09, spec.width * .78);
+    context.fillStyle = isBold ? brand.primaryColor : brand.accentColor; context.fillRect(copyX, ctaY, spec.width * .38, spec.height * .075);
     context.fillStyle = "#09254a"; context.font = `700 ${Math.round(spec.width * .03)}px sans-serif`;
-    context.fillText((request.cta || brand.defaultCta || "Get Started").slice(0, 25), spec.width * .1, spec.height * .87);
+    context.fillText(cta.slice(0, 25), copyX + spec.width * .03, ctaY + spec.height * .05);
     if (logoUrl) { try { const logo = new Image(); logo.src = logoUrl; await new Promise<void>((resolve,reject)=>{logo.onload=()=>resolve();logo.onerror=()=>reject(new Error("logo"))}); const ratio=Math.min(spec.width*.16/logo.width,spec.height*.09/logo.height); context.drawImage(logo,spec.width*.77,spec.height*.06,logo.width*ratio,logo.height*ratio); } catch { context.fillStyle="#fff";context.font=`600 ${Math.round(spec.width*.025)}px sans-serif`;context.fillText(brand.name,spec.width*.07,spec.height*.95); } }
     else { context.fillStyle="#fff";context.font=`600 ${Math.round(spec.width*.025)}px sans-serif`;context.fillText(brand.name,spec.width*.07,spec.height*.95); }
   }
@@ -84,12 +92,12 @@ export function CreativeStudio({ leads, lang }: { leads: Lead[]; lang: Language 
   useEffect(() => { load(); }, [load]);
 
   const generateOne = async (target: CreativeGenerationRequest, source?: CreativeAsset) => {
-    const targetPrompt = source?.prompt || buildCreativePrompt(target, brand);
+    const targetPrompt = buildCreativePrompt(target, brand);
     const generated = await generateCreativeImage(targetPrompt, target);
     const blob = await compose(generated.image, target, brand, logoUrl);
     const storagePath = await creativeStorage.upload(crypto.randomUUID(), blob);
     const spec = formatSpecs[target.format];
-    const asset = await creativeAssetsRepository.create({ creativeType: target.creativeType, format: target.format, aspectRatio: spec.ratio, width: spec.width, height: spec.height, prompt: targetPrompt, headline: target.hook || null, supportingText: target.offer || null, cta: target.cta || null, storagePath, mimeType: "image/png", provider: generated.provider, model: generated.model, status: "ready", brandKitId: source?.brandKitId || brand.id || null, serviceId: source?.serviceId || target.serviceId || null, prospectId: source?.prospectId || target.prospectId || null });
+    const asset = await creativeAssetsRepository.create({ creativeType: target.creativeType, format: target.format, aspectRatio: spec.ratio, width: spec.width, height: spec.height, prompt: targetPrompt, headline: target.hook || null, supportingText: target.offer || null, cta: resolveCreativeCta(target, brand), storagePath, mimeType: "image/png", provider: generated.provider, model: generated.model, status: "ready", brandKitId: source?.brandKitId || brand.id || null, serviceId: source?.serviceId || target.serviceId || null, prospectId: source?.prospectId || target.prospectId || null });
     const localUrl = URL.createObjectURL(blob);
     setAssets((current) => [asset, ...current]);
     setUrls((current) => ({ ...current, [asset.id]: localUrl }));
@@ -151,7 +159,7 @@ export function CreativeStudio({ leads, lang }: { leads: Lead[]; lang: Language 
     setSelectedAsset(null); setTab("create");
   };
   const visibleAssets = assets.filter((asset) => filter === "all" || (filter === "ad" ? asset.creativeType.includes("ad") : filter === "format" ? true : asset.creativeType === filter || asset.format === filter));
-  const help = async () => { const fallback = { hook: request.service ? `${request.service} for your next step` : "Build your digital momentum", supporting: "A clear, premium solution for your business.", cta: request.cta || "Get Started", visual: "Clean premium SaaS visual with generous negative space" }; const result: any = await requestOpenAI("creative_copy", { service: request.service, goal: request.goal, audience: request.audience, language: lang, style: request.style }); const copy = result.result || fallback; update({ hook: copy.hook || fallback.hook, offer: copy.supporting || copy.supportingText || fallback.supporting, cta: copy.cta || fallback.cta, visualDirection: copy.visual || copy.visualDirection || fallback.visual }); };
+  const help = async () => { const fallback = { hook: request.service ? `${request.service}: built for the next move` : "Make your next move count", supporting: request.service ? `A premium ${request.service.toLowerCase()} experience designed to move business forward.` : "A premium solution designed to move business forward.", cta: resolveCreativeCta(request, brand), visual: `${request.service || "Modern business"} campaign with sophisticated commercial lighting, polished materials, and clear negative space for copy.` }; const result: any = await requestOpenAI("creative_copy", { service: request.service, goal: request.goal, audience: request.audience, language: lang, style: request.style }); const copy = result.result || fallback; update({ hook: copy.hook || fallback.hook, offer: copy.supporting || copy.supportingText || fallback.supporting, cta: copy.cta || fallback.cta, visualDirection: copy.visual || copy.visualDirection || fallback.visual }); };
 
   return <>
     <div className="page-title"><div><h1>{text(lang, "AI Creative Studio", "Estudio Creativo IA")}</h1><p>{text(lang, "Create AI-powered sales visuals", "Crea material visual comercial con IA")}</p></div></div>
@@ -166,15 +174,15 @@ export function CreativeStudio({ leads, lang }: { leads: Lead[]; lang: Language 
       <label>{text(lang,"Prospect","Prospecto")}<select value={request.prospectId||""} onChange={(event)=>update({prospectId:event.target.value||undefined})}><option value="">{text(lang,"None","Ninguno")}</option>{leads.map(lead=><option key={lead.id} value={lead.id}>{lead.firstName} {lead.lastName}{lead.business?` · ${lead.business}`:""}</option>)}</select></label>
       <label>{text(lang, "Main Hook", "Hook")}<input maxLength={70} value={request.hook || ""} onChange={(event) => update({ hook: event.target.value })} /></label>
       <label>{text(lang, "Offer / supporting text", "Oferta / texto")}<input maxLength={110} value={request.offer || ""} onChange={(event) => update({ offer: event.target.value })} /></label>
-      <label>CTA<input value={request.cta || ""} onChange={(event) => update({ cta: event.target.value })} /></label>
+      <label>CTA<input placeholder={resolveCreativeCta(request, brand)} value={request.cta || ""} onChange={(event) => update({ cta: event.target.value })} /></label>
       <label>{text(lang, "Visual direction", "Dirección visual")}<textarea value={request.visualDirection || ""} onChange={(event) => update({ visualDirection: event.target.value })} /></label>
       <button className="primary" disabled={busy} onClick={generate}>{busy ? text(lang, "Generating your creative...", "Generando tu creativo...") : text(lang, "Generate Image", "Generar Imagen")}</button>
       <button onClick={help}>{text(lang, "Help Me Create", "Ayúdame a Crear")}</button>
       <button disabled={busy} onClick={generateCampaignPack}>{busy && campaignProgress ? `${text(lang, "Generating Campaign Pack...", "Generando Paquete de Campaña...")} ${campaignProgress}` : text(lang, "Generate Campaign Pack", "Generar Paquete de Campaña")}</button>
-    </section><section className={`creative-preview ${request.format}`}>{preview && <img src={preview} />}<div className="creative-overlay"><b>{request.hook || brand.name}</b><span>{request.offer}</span><em>{request.cta || brand.defaultCta}</em></div></section></div>}
+    </section><section className={`creative-preview ${request.format}`}>{preview && <img src={preview} />}<div className="creative-overlay"><b>{request.hook || brand.name}</b><span>{request.offer}</span><em>{resolveCreativeCta(request, brand)}</em></div></section></div>}
     {tab === "generated" && <><div className="creative-tabs">{[["all","All","Todos"],["social_post","Social Post","Post Social"],["story","Story","Historia"],["ad","Ad","Anuncio"],["promotion","Promotion","Promoción"],["service","Service","Servicio"]].map(([value,en,es]) => <button key={value} className={filter === value ? "primary" : ""} onClick={() => setFilter(value)}>{text(lang,en,es)}</button>)}</div><section className="creative-history">{assets.length ? visibleAssets.length ? visibleAssets.map((asset) => <article className={`creative-card ${campaignIds.includes(asset.id) ? "campaign-asset" : ""}`} key={asset.id}>{urls[asset.id] && <img src={urls[asset.id]} />}<b>{asset.creativeType.replace(/_/g, " ")}</b><small>{asset.format} · {new Date(asset.createdAt).toLocaleDateString()} · {asset.provider}{asset.model ? ` / ${asset.model}` : ""}</small>{campaignIds.includes(asset.id) && <small>{text(lang,"Campaign Pack","Paquete de Campaña")}</small>}<div><button onClick={() => setSelectedAsset(asset)}>{text(lang,"Open","Abrir")}</button><button onClick={() => download(asset)}><Download size={15} /></button><button disabled={Boolean(regeneratingId)} onClick={() => regenerate(asset)}>{regeneratingId === asset.id ? text(lang, "Regenerating...", "Regenerando...") : text(lang, "Regenerate", "Regenerar")}</button><button onClick={() => duplicate(asset)}>{text(lang,"Duplicate","Duplicar")}</button><button className="danger" onClick={() => remove(asset)}><Trash2 size={15} /></button></div></article>) : <p>{text(lang,"No creatives match this filter.","No hay creativos que coincidan con este filtro.")}</p> : <p>{text(lang, "Create your first AI-powered marketing creative.", "Crea tu primer creativo de marketing con IA.")}</p>}</section></>}
     {selectedAsset && <div className="modal-bg"><section className="modal creative-detail"><h2>{text(lang,"Creative details","Detalles del creativo")}</h2>{urls[selectedAsset.id] && <img src={urls[selectedAsset.id]} />}<div className="facts"><span>{text(lang,"Date","Fecha")}<b>{new Date(selectedAsset.createdAt).toLocaleString()}</b></span><span>{text(lang,"Format","Formato")}<b>{selectedAsset.format}</b></span><span>{text(lang,"Type","Tipo")}<b>{selectedAsset.creativeType}</b></span><span>{text(lang,"Provider","Proveedor")}<b>{selectedAsset.provider} {selectedAsset.model || ""}</b></span></div>{[["Headline",selectedAsset.headline],["Supporting text",selectedAsset.supportingText],["CTA",selectedAsset.cta],["Caption",selectedAsset.caption],["Hashtags",selectedAsset.hashtags],["Prompt",selectedAsset.prompt]].map(([label,value]) => value && <div className="note" key={label}><b>{label}</b><p>{value}</p></div>)}<footer><button onClick={() => download(selectedAsset)}>{text(lang,"Download","Descargar")}</button><button onClick={() => regenerate(selectedAsset)}>{text(lang,"Regenerate","Regenerar")}</button><button onClick={() => duplicate(selectedAsset)}>{text(lang,"Duplicate","Duplicar")}</button><button onClick={() => navigator.clipboard.writeText(selectedAsset.caption || "")}>{text(lang,"Copy Caption","Copiar caption")}</button><button onClick={() => navigator.clipboard.writeText(selectedAsset.hashtags || "")}>{text(lang,"Copy Hashtags","Copiar hashtags")}</button><button className="danger" onClick={() => remove(selectedAsset)}>{text(lang,"Delete","Eliminar")}</button><button onClick={() => setSelectedAsset(null)}>{text(lang,"Close","Cerrar")}</button></footer></section></div>}
     {tab === "brand" && <section className="panel"><h2>{text(lang, "Brand Kit", "Kit de Marca")}</h2><section className="brand-logo"><b>{text(lang, "Logo", "Logo")}</b>{logoUrl ? <img src={logoUrl} alt={brand.name} /> : <span>{text(lang, "No logo uploaded", "No hay logo cargado")}</span>}<div><label className="button-like">{uploadingLogo ? text(lang, "Uploading...", "Subiendo...") : text(lang, brand.logoPath ? "Replace Logo" : "Upload Logo", brand.logoPath ? "Reemplazar Logo" : "Subir Logo")}<input type="file" accept="image/png,image/jpeg,image/webp" disabled={uploadingLogo} onChange={(event) => uploadLogo(event.target.files?.[0])} /></label>{brand.logoPath && <button className="danger" disabled={uploadingLogo} onClick={removeLogo}>{text(lang, "Remove Logo", "Eliminar Logo")}</button>}</div></section><div className="form-grid">{(["name", "primaryColor", "secondaryColor", "accentColor", "backgroundColor", "website", "defaultCta", "visualStyle", "notes"] as const).map((key) => <label key={key}>{key}<input value={brand[key] || ""} onChange={(event) => setBrand((current) => ({ ...current, [key]: event.target.value }))} /></label>)}</div><button className="primary" onClick={saveBrand}>{text(lang, "Save", "Guardar")}</button></section>}
-    {tab === "templates" && <section className="template-grid">{templates.map((template) => <article className="template" key={template}><span>{template}</span><h3>{text(lang, "Adaptable social layout", "Diseño social adaptable")}</h3><button onClick={() => { update({ template }); setTab("create"); }}>{text(lang, "Use template", "Usar plantilla")}</button></article>)}</section>}
+    {tab === "templates" && <section className="template-grid">{templates.map((template) => <article className="template" key={template}><span>{template}</span><h3>{text(lang, template === "Bold Promotion" ? "High-impact offer layout" : template === "Minimal Business" ? "Refined editorial hierarchy" : template === "Technology Launch" ? "Modern technology composition" : template === "Clean SaaS" ? "Structured clean-copy layout" : "Premium navy campaign treatment", template === "Bold Promotion" ? "Diseño de oferta de alto impacto" : template === "Minimal Business" ? "Jerarquía editorial refinada" : template === "Technology Launch" ? "Composición tecnológica moderna" : template === "Clean SaaS" ? "Diseño limpio y estructurado" : "Tratamiento premium navy")}</h3><button onClick={() => { update({ template }); setTab("create"); }}>{text(lang, "Use template", "Usar plantilla")}</button></article>)}</section>}
   </>;
 }

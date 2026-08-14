@@ -24,7 +24,7 @@ export default async function handler(req: any, res: any) {
   if (!process.env.OPENAI_API_KEY) return safeError(res, 503, "Image service is unavailable");
   try {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 60000 });
-    const image = await client.images.generate({ model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1", prompt: prompt.trim(), size, quality: "medium", output_format: "png", n: 1 } as any);
+    const image = await client.images.generate({ model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1", prompt: prompt.trim(), size, quality: "high", output_format: "png", n: 1 } as any);
     const base64 = (image.data as any)?.[0]?.b64_json;
     if (!base64) return safeError(res, 502, "Image service did not return an image");
     return res.status(200).json({ success: true, image: `data:image/png;base64,${base64}`, provider: "openai", model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1" });
