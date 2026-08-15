@@ -90,7 +90,7 @@ export function MarkLostModal({ lang, onCancel, onConfirm }: Props) {
             "Chose another option",
             "Other",
           ].map((x) => (
-            <option value={x}>{x}</option>
+            <option key={x} value={x}>{lang === "es" ? ({ "Price": "Precio", "No response": "Sin respuesta", "Competitor": "Competidor", "Not ready": "No está listo", "Budget": "Presupuesto", "Timing": "Momento", "Chose another option": "Eligió otra opción", "Other": "Otro" }[x] || x) : x}</option>
           ))}
         </select>
         <input
