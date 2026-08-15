@@ -207,6 +207,7 @@ function Shell({
   setLang: (l: Language) => void;
 }) {
   const [mobile, setMobile] = useState(false);
+  const navLabel = (key: string) => ({ Forecast: lang === "es" ? "Pronóstico" : "Forecast", Tasks: lang === "es" ? "Tareas" : "Tasks", Communications: lang === "es" ? "Comunicaciones" : "Communications", "Creative Studio": lang === "es" ? "Estudio Creativo" : "Creative Studio", Automations: lang === "es" ? "Automatizaciones" : "Automations", "AI Center": lang === "es" ? "Centro de IA" : "AI Center" }[key] || (t as any)(lang, key));
   const nav = [
     ["/dashboard", "dashboard", BarChart3],
     ["/leads", "leads", Users],
@@ -227,10 +228,7 @@ function Shell({
     <div className="app">
       <aside className={mobile ? "side open" : "side"}>
         <div className="brand">
-          <span className="brand-mark">N</span>
-          <div>
-            NEXT STUDIO<small>Sales AI</small>
-          </div>
+          <img className="app-logo" src="/brand/next-studio-logo.png" alt="Next Studio" />
           <button className="mobile-only" onClick={() => setMobile(false)}>
             <X />
           </button>
@@ -239,16 +237,12 @@ function Shell({
           {nav.map(([to, key, Icon]) => (
             <NavLink key={to} to={to} onClick={() => setMobile(false)}>
               <Icon size={19} />
-              {["AI Center", "Tasks", "Communications", "Automations", "Forecast", "Creative Studio"].includes(
-                key,
-              )
-                ? key
-                : (t as any)(lang, key)}
+              {navLabel(key)}
             </NavLink>
           ))}
         </nav>
         <div className="workspace">
-          Next Studio<small>Sales Workspace</small>
+          Next Studio<small>{lang === "es" ? "Espacio de ventas" : "Sales Workspace"}</small>
         </div>
       </aside>
       <main>
@@ -258,17 +252,9 @@ function Shell({
           </button>
           <div>
             <strong>Next Studio Sales AI</strong>
-            <span>Turn conversations into customers.</span>
+            <span>{lang === "es" ? "Convierte conversaciones en clientes." : "Turn conversations into customers."}</span>
           </div>
-          <select
-            className="language"
-            value={lang}
-            onChange={(e) => setLang(e.target.value as Language)}
-            aria-label="Language"
-          >
-            <option value="en">🇺🇸 English</option>
-            <option value="es">🇪🇨 Español</option>
-          </select>
+          <div className="language-buttons" aria-label="Language"><button className={lang === "es" ? "active" : ""} onClick={() => setLang("es")}>🇪🇨 Español</button><button className={lang === "en" ? "active" : ""} onClick={() => setLang("en")}>🇺🇸 English</button></div>
         </header>
         <div className="content">{children}</div>
       </main>
@@ -283,7 +269,7 @@ function Dashboard({
   lang: Language;
 }) {
   const nav = useNavigate();
-  const recommendations = salesActions(db.leads).slice(0, 5);
+  const recommendations = salesActions(db.leads, lang).slice(0, 5);
   const count = (s: Stage) => db.leads.filter((l) => l.stage === s).length;
   const cards = [
     [t(lang, "total"), db.leads.length, Users],
@@ -378,7 +364,7 @@ function Dashboard({
 function InsightsPage({ db, lang }: { db: ReturnType<typeof storage.get>; lang: Language }) {
   return <><Insights db={db} lang={lang} /><DealInsightsPanel leads={db.leads} lang={lang} /></>;
 }
-function SalesActions({db,lang}:{db:ReturnType<typeof storage.get>;lang:Language}){const nav=useNavigate(),actions=salesActions(db.leads);const [prospect,setProspect]=useState<Lead>();const [task,setTask]=useState<Lead>();const [follow,setFollow]=useState<Lead>();return <><PageTitle title={lang==='es'?'Centro de Acciones':'Sales Action Center'}/><section className="panel"><div className="sales-actions">{actions.map(a=>{const lead=db.leads.find(l=>l.id===a.prospectId);return <article className="sales-action-card" key={a.prospectId}><span className={`task-badge priority-${a.priority}`}>{a.priority}</span><div><b>{lead?`${lead.firstName} ${lead.lastName}`:''}</b><p>{a.reason}</p><small>{a.recommendation} · {money(a.potentialValue)}</small></div><div className="button-row"><button className="primary" onClick={()=>nav('/leads/'+a.prospectId)}>{lang==='es'?'Abrir prospecto':'Open Prospect'}</button>{lead&&<><button onClick={()=>setTask(lead)}>{lang==='es'?'Crear Tarea':'Create Task'}</button><button onClick={()=>setFollow(lead)}>{lang==='es'?'Crear Seguimiento':'Create Follow-up'}</button><button onClick={()=>setProspect(lead)}>{lang==='es'?'Preparar mensaje':'Draft Message'}</button></>}</div></article>})}{!actions.length&&<p>{lang==='es'?'Todo está al día.':'You’re all caught up.'}</p>}</div></section>{prospect&&<AIMessageAssistant prospect={prospect} open onClose={()=>setProspect(undefined)} lang={lang}/>} {task&&<QuickTask prospect={task} lang={lang} onClose={()=>setTask(undefined)}/>} {follow&&<QuickFollowUp prospect={follow} lang={lang} onClose={()=>setFollow(undefined)}/>}</>}
+function SalesActions({db,lang}:{db:ReturnType<typeof storage.get>;lang:Language}){const nav=useNavigate(),actions=salesActions(db.leads,lang);const [prospect,setProspect]=useState<Lead>();const [task,setTask]=useState<Lead>();const [follow,setFollow]=useState<Lead>();return <><PageTitle title={lang==='es'?'Centro de Acciones':'Sales Action Center'}/><section className="panel"><div className="sales-actions">{actions.map(a=>{const lead=db.leads.find(l=>l.id===a.prospectId);return <article className="sales-action-card" key={a.prospectId}><span className={`task-badge priority-${a.priority}`}>{a.priority}</span><div><b>{lead?`${lead.firstName} ${lead.lastName}`:''}</b><p>{a.reason}</p><small>{a.recommendation} · {money(a.potentialValue)}</small></div><div className="button-row"><button className="primary" onClick={()=>nav('/leads/'+a.prospectId)}>{lang==='es'?'Abrir prospecto':'Open Prospect'}</button>{lead&&<><button onClick={()=>setTask(lead)}>{lang==='es'?'Crear Tarea':'Create Task'}</button><button onClick={()=>setFollow(lead)}>{lang==='es'?'Crear Seguimiento':'Create Follow-up'}</button><button onClick={()=>setProspect(lead)}>{lang==='es'?'Preparar mensaje':'Draft Message'}</button></>}</div></article>})}{!actions.length&&<p>{lang==='es'?'Todo está al día.':'You’re all caught up.'}</p>}</div></section>{prospect&&<AIMessageAssistant prospect={prospect} open onClose={()=>setProspect(undefined)} lang={lang}/>} {task&&<QuickTask prospect={task} lang={lang} onClose={()=>setTask(undefined)}/>} {follow&&<QuickFollowUp prospect={follow} lang={lang} onClose={()=>setFollow(undefined)}/>}</>}
 function PageTitle({
   title,
   children,
@@ -847,7 +833,7 @@ function Detail({
   const [activityRefreshKey,setActivityRefreshKey]=useState(0);
   const handleActivityChanged=()=>setActivityRefreshKey(x=>x+1);
   if (!lead) return <Empty lang={lang} />;
-  const recommendation = salesActions([lead])[0];
+  const recommendation = salesActions([lead], lang)[0];
   const closing=closeProbability(lead); const displayedProbability=lead.probability??closing.probability;
   const message = (cat: string) => {
     const x = db.templates.find((q) => q.category === cat);
@@ -937,23 +923,23 @@ function Detail({
                 }
               >
                 <MessageSquare />
-                Open WhatsApp
+                {lang === "es" ? "Abrir WhatsApp" : "Open WhatsApp"}
               </button>
               <button
                 onClick={() => action(`tel:${lead.phone}`, "Call opened")}
               >
                 <Phone />
-                Call
+                {lang === "es" ? "Llamar" : "Call"}
               </button>
               <button
                 onClick={() => action(`mailto:${lead.email}`, "Email opened")}
               >
                 <Mail />
-                Email
+                {lang === "es" ? "Correo electrónico" : "Email"}
               </button>
               <button onClick={() => copy("initial")}>
                 <Copy />
-                Copy Message
+                {lang === "es" ? "Copiar mensaje" : "Copy Message"}
               </button>
               <button
                 onClick={() => {
@@ -1023,7 +1009,7 @@ function Detail({
                   <div>
                     <b>
                       {db.templates.find((q) => q.category === x)?.name ||
-                        "Quote"}
+                        (lang === "es" ? "Cotización" : "Quote")}
                     </b>
                     <p>
                       {x === "quote"
@@ -1064,10 +1050,10 @@ function Detail({
                     })
                   }
                 >
-                  <option value="not_sent">Not Sent</option>
-                  <option value="sent">Sent</option>
-                  <option value="accepted">Accepted</option>
-                  <option value="rejected">Rejected</option>
+                  <option value="not_sent">{lang === "es" ? "No enviada" : "Not sent"}</option>
+                  <option value="sent">{lang === "es" ? "Enviada" : "Sent"}</option>
+                  <option value="accepted">{lang === "es" ? "Aceptada" : "Accepted"}</option>
+                  <option value="rejected">{lang === "es" ? "Rechazada" : "Rejected"}</option>
                 </select>
               </span>
             </div>
@@ -1098,7 +1084,7 @@ function Detail({
                 }
               }}
             >
-              Add Note
+              {lang === "es" ? "Agregar nota" : "Add Note"}
             </button>
             {db.notes
               .filter((n) => n.leadId === lead.id)
@@ -1204,9 +1190,9 @@ function FollowUps({
   notify: (x: string) => void;
 }) {
   const groups = [
-    ["Overdue", db.followUps.filter((f) => !f.completed && f.date < today())],
-    ["Today", db.followUps.filter((f) => !f.completed && f.date === today())],
-    ["Upcoming", db.followUps.filter((f) => !f.completed && f.date > today())],
+    [lang === "es" ? "Vencidos" : "Overdue", db.followUps.filter((f) => !f.completed && f.date < today())],
+    [lang === "es" ? "Hoy" : "Today", db.followUps.filter((f) => !f.completed && f.date === today())],
+    [lang === "es" ? "Próximos" : "Upcoming", db.followUps.filter((f) => !f.completed && f.date > today())],
   ] as const;
   return (
     <>
@@ -1223,7 +1209,7 @@ function FollowUps({
                       <b>
                         {l.firstName} {l.lastName}{" "}
                         {f.date < today() && (
-                          <span className="overdue">Overdue</span>
+                          <span className="overdue">{lang === "es" ? "Vencido" : "Overdue"}</span>
                         )}
                       </b>
                       <span>

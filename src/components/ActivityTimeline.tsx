@@ -3,6 +3,7 @@ import type { Lead, Language } from "../types";
 import { tasksRepository } from "../services/db/tasks";
 import { followUpsRepository } from "../services/db/followUps";
 import { communicationsRepository } from "../services/db/communications";
+import { statusLabel } from "../i18n";
 export type ActivityTimelineItem = {
   id: string;
   type: "prospect_created" | "task" | "follow_up" | "communication" | "draft" | "deal_won" | "deal_lost";
@@ -72,7 +73,7 @@ export function ActivityTimeline({
             ...follows.map((f) => ({
               id: `follow-${f.id}`,
               type: "follow_up" as const,
-              title: `${f.type} ${lang === "es" ? "seguimiento" : "follow-up"}`,
+              title: `${statusLabel(lang, "channel", f.type)} ${lang === "es" ? "seguimiento" : "follow-up"}`,
               description: f.note,
               timestamp: f.completedAt || f.dueAt || f.createdAt,
               status: f.status,
@@ -81,7 +82,7 @@ export function ActivityTimeline({
             ...communications.map((c) => ({
               id: `communication-${c.id}`,
               type: "communication" as const,
-              title: c.subject || c.channel,
+              title: c.subject || statusLabel(lang, "channel", c.channel),
               description: c.content,
               timestamp: c.sentAt || c.createdAt,
               status: c.status,
@@ -90,7 +91,7 @@ export function ActivityTimeline({
             ...drafts.map((d) => ({
               id: `draft-${d.id}`,
               type: "draft" as const,
-              title: `${lang === "es" ? "Borrador" : "Draft"} · ${d.channel}`,
+              title: `${lang === "es" ? "Borrador" : "Draft"} · ${statusLabel(lang, "channel", d.channel)}`,
               description: d.subject || d.content,
               timestamp: d.updatedAt || d.createdAt,
               status: "draft",
@@ -125,8 +126,8 @@ export function ActivityTimeline({
             <b>{x.title}</b>
             {x.description && <small>{x.description}</small>}
             <small>
-              {new Date(x.timestamp).toLocaleString()}{" "}
-              {x.status && ` · ${x.status}`}
+              {new Date(x.timestamp).toLocaleString(lang === "es" ? "es-ES" : "en-US")}{" "}
+              {x.status && ` · ${x.status === "draft" ? (lang === "es" ? "Borrador" : "Draft") : x.type === "task" ? statusLabel(lang, "task", x.status) : x.type === "follow_up" ? statusLabel(lang, "followUp", x.status) : x.type === "deal_won" ? (lang === "es" ? "Ganado" : "Won") : x.type === "deal_lost" ? (lang === "es" ? "Perdido" : "Lost") : x.status}`}
             </small>
           </div>
         </div>

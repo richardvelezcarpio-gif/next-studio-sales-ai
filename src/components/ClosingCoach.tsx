@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Language, Lead, Task } from "../types";
 import type { CloudFollowUp } from "../services/db/followUps";
 import { tasksRepository } from "../services/db/tasks";
@@ -15,13 +15,17 @@ export function ClosingCoach({ lead, lang, onDraft }: { lead: Lead; lang: Langua
   const [advice, setAdvice] = useState<ClosingAdvice | null>(null);
   const [busy, setBusy] = useState(false);
   const [provider, setProvider] = useState<"openai" | "local" | null>(null);
+  useEffect(() => {
+    setAdvice(null);
+    setProvider(null);
+  }, [lead.id, lead.stage, lead.quoteStatus, lead.updatedAt, lead.potentialValue]);
   const generate = async () => {
     setBusy(true);
     let tasks: Task[] = [], follows: CloudFollowUp[] = [], communications: unknown[] = [], drafts: unknown[] = [];
     try { [tasks, follows, communications, drafts] = await Promise.all([tasksRepository.getByProspectId(lead.id), followUpsRepository.getByProspectId(lead.id), communicationsRepository.getCommunicationsByProspectId(lead.id), communicationsRepository.getDraftsByProspectId(lead.id)]); } catch { /* local advice still works with the persisted lead */ }
     const fallback = localClosingAdvice(lead, lang, tasks, follows);
     const closing = closeProbability(lead);
-    const response = await requestOpenAI<ClosingAdvice>("closing_coach", { firstName: lead.firstName, businessName: lead.business || undefined, service: lead.service, stage: lead.stage, estimatedValue: lead.potentialValue, probability: leadProbability(lead), expectedCloseDate: lead.expectedCloseDate || undefined, nextStep: lead.nextStep || undefined, lastActivityAt: lead.lastActivityAt || lead.updatedAt || undefined, tasks: tasks.map((task) => ({ title: task.title, dueDate: task.dueDate, status: task.status })), followUps: follows.map((follow) => ({ type: follow.type, dueAt: follow.dueAt, status: follow.status })), communicationsCount: communications.length, draftsCount: drafts.length, positiveSignals: closing.positiveSignals, risks: riskReasons(lead, tasks, follows), nextBestAction: salesActions([lead])[0]?.recommendation, language: lang });
+    const response = await requestOpenAI<ClosingAdvice>("closing_coach", { firstName: lead.firstName, businessName: lead.business || undefined, service: lead.service, stage: lead.stage, quoteStatus: lead.quoteStatus, estimatedValue: lead.potentialValue, probability: leadProbability(lead), expectedCloseDate: lead.expectedCloseDate || undefined, nextStep: lead.nextStep || undefined, lastActivityAt: lead.lastActivityAt || lead.updatedAt || undefined, tasks: tasks.map((task) => ({ title: task.title, dueDate: task.dueDate, status: task.status })), followUps: follows.map((follow) => ({ type: follow.type, dueAt: follow.dueAt, status: follow.status })), communicationsCount: communications.length, draftsCount: drafts.length, positiveSignals: closing.positiveSignals, risks: riskReasons(lead, tasks, follows), nextBestAction: salesActions([lead], lang)[0]?.recommendation, language: lang });
     const result = response.result;
     const complete = result && [result.happening, result.mainRisk, result.approach, result.nextStep, result.messageAngle].every(Boolean);
     setAdvice(complete ? result : fallback);

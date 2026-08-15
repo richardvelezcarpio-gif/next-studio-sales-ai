@@ -12,6 +12,7 @@ import { communicationsRepository } from "./services/db/communications";
 import { automationsRepository } from "./services/db/automations";
 import { tasksRepository } from "./services/db/tasks";
 import { useAuth } from "./auth/AuthProvider";
+import { statusLabel } from "./i18n";
 import type {
   AutomationRule,
   CommunicationMessage,
@@ -19,6 +20,13 @@ import type {
   Task,
 } from "./types";
 const tx = (l: Language, en: string, es: string) => (l === "es" ? es : en);
+const automationLabel = (lang: Language, value: string) => {
+  const labels: Record<string, [string, string]> = {
+    "No Activity": ["No activity", "Sin actividad"], no_activity: ["No activity", "Sin actividad"], stage_changed: ["Stage changed", "Cambio de etapa"], "Stage Changed": ["Stage changed", "Cambio de etapa"], follow_up_due: ["Follow-up due", "Seguimiento pendiente"], "Follow-Up Overdue": ["Follow-up overdue", "Seguimiento vencido"], ai_score_above: ["AI score above", "Puntaje IA superior"], "AI Score Above": ["AI score above", "Puntaje IA superior"], priority_changed: ["Priority changed", "Cambio de prioridad"], "Priority Changed": ["Priority changed", "Cambio de prioridad"], deal_value_above: ["Deal value above", "Valor de oportunidad superior"], "Deal Value Above": ["Deal value above", "Valor de oportunidad superior"], create_task: ["Create task", "Crear tarea"], "Create Task": ["Create task", "Crear tarea"], create_follow_up: ["Create follow-up", "Crear seguimiento"], "Create Follow-Up": ["Create follow-up", "Crear seguimiento"], prepare_message: ["Prepare message", "Preparar mensaje"], create_draft: ["Create draft", "Crear borrador"], "Create Draft": ["Create draft", "Crear borrador"], add_recommendation: ["Add recommendation", "Agregar recomendación"], "Add Recommendation": ["Add recommendation", "Agregar recomendación"], "Proposal > 3 days": ["Proposal > 3 days", "Propuesta > 3 días"]
+  };
+  const label = labels[value];
+  return label ? label[lang === "es" ? 1 : 0] : value.replace(/_/g, " ");
+};
 const key = "nextStudioSalesOperations";
 type Ops = {
   messages: CommunicationMessage[];
@@ -460,9 +468,9 @@ export function Tasks({
                     })
                   }
                 >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
+                  <option value="low">{statusLabel(lang, "priority", "low")}</option>
+                  <option value="medium">{statusLabel(lang, "priority", "medium")}</option>
+                  <option value="high">{statusLabel(lang, "priority", "high")}</option>
                 </select>
               </label>
               <label className="wide">
@@ -594,7 +602,7 @@ export function Automations({
               <div className="automation-card__content">
                 <b>{r.name}</b>
                 <span>
-                  {r.trigger} · {r.condition} → {r.action}
+                  {automationLabel(lang, r.trigger)} · {automationLabel(lang, r.condition)} → {automationLabel(lang, r.action)}
                 </span>
                 <small>
                   {tx(lang, "Times triggered: ", "Veces activada: ")}
